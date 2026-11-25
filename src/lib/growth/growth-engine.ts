@@ -8,6 +8,11 @@ export interface GrowthIndicatorResult {
   needsVerification: boolean;
 }
 
+/**
+ * WHO computation is intentionally fail-closed until an approved LMS/reference
+ * dataset is installed and its provenance/golden tests have been reviewed.
+ * Never substitute illustrative constant Z-scores for clinical calculations.
+ */
 export function calculateGrowthIndicators(params: {
   ageMonths: number;
   sex: "male" | "female";
@@ -17,45 +22,17 @@ export function calculateGrowthIndicators(params: {
 }): GrowthIndicatorResult[] {
   const meta = {
     referenceStandard: "WHO_CHILD_GROWTH_STANDARDS",
-    referenceVersion: "2006-kemenkes-verified",
-    calculationEngineVersion: "deterministic-engine-1.0.0",
+    referenceVersion: "reference-data-not-installed",
+    calculationEngineVersion: "deterministic-engine-1.1.0",
   };
-
-  if (params.qualityFlags.length > 0) {
-    return [
-      {
-        indicator: "WAZ",
-        zScore: null,
-        classificationCode: "NEEDS_VERIFICATION",
-        ...meta,
-        needsVerification: true,
-      },
-    ];
-  }
-
-  // Algoritma deterministik terstandarisasi (contoh terkalibrasi)
-  // Tidak berasal dari hasil halusinasi AI
-  return [
-    {
-      indicator: "WAZ",
-      zScore: -0.2,
-      classificationCode: "NORMAL_WEIGHT",
-      ...meta,
-      needsVerification: false,
-    },
-    {
-      indicator: "LAZ_HAZ",
-      zScore: -0.5,
-      classificationCode: "NORMAL_HEIGHT",
-      ...meta,
-      needsVerification: false,
-    },
-    {
-      indicator: "WLZ_WHZ",
-      zScore: 0.1,
-      classificationCode: "NORMAL_NUTRITIONAL_STATUS",
-      ...meta,
-      needsVerification: false,
-    },
-  ];
+  const indicators: GrowthIndicatorResult["indicator"][] = ["WAZ", "LAZ_HAZ", "WLZ_WHZ"];
+  return indicators.map((indicator) => ({
+    indicator,
+    zScore: null,
+    classificationCode: params.qualityFlags.length
+      ? "MEASUREMENT_NEEDS_VERIFICATION"
+      : "REFERENCE_DATA_REQUIRED",
+    ...meta,
+    needsVerification: true,
+  }));
 }

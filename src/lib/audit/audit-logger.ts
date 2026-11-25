@@ -8,6 +8,7 @@ export async function writeAuditLog(params: {
   beforeSnapshot: Record<string, unknown> | null;
   afterSnapshot: Record<string, unknown> | null;
   reason: string;
+  posyanduId: string;
 }) {
   const now = new Date().toISOString();
   await adminDb.collection("audit_logs").add({

@@ -1,0 +1,18 @@
+{
+  "baseline": "Digital-Posyandu.zip",
+  "patch_order": [
+    "Digital-Posyandu-Phase-1.patch",
+    "Digital-Posyandu-Phase-2.patch",
+    "Digital-Posyandu-Phase-3.patch",
+    "Digital-Posyandu-Phase-4.patch",
+    "Digital-Posyandu-Phase-5.patch",
+    "Digital-Posyandu-Phase-6.patch"
+  ],
+  "verification": "All six patches passed git apply --check and were applied sequentially to a clean extraction of the supplied baseline.",
+  "important": [
+    "WHO growth assessment deliberately returns null z-scores until approved WHO reference data and golden tests are installed.",
+    "The Phase 1 login requires Firebase Authentication users and active membership records.",
+    "Membership Firestore document IDs follow {uid}_{posyanduId}.",
+    "Do not deploy until Firebase Rules Emulator tests, full typecheck/build, backup/restore, and field validation are completed."
+  ]
+}

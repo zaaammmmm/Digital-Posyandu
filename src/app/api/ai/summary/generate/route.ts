@@ -1,19 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
+import { adminDb } from "@/lib/firebase/admin";
 import { generateSafeSummary } from "@/lib/ai/summary-generator";
 import { buildSafeAiPayload } from "@/lib/ai/payload-builder";
+import { requireAuth, isAuthError } from "@/lib/auth/server";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req, ["health_worker", "posyandu_admin", "system_admin"]);
+  if (isAuthError(auth)) return auth;
   try {
-    const rawPayload = await req.json();
-    const safePayload = buildSafeAiPayload(rawPayload);
-    const summary = await generateSafeSummary(safePayload);
-
-    return NextResponse.json({
-      success: true,
-      summary: summary.text,
-      safetyStatus: summary.safetyStatus,
+    const { visitId } = await req.json();
+    if (typeof visitId !== "string") return NextResponse.json({ error: "visitId wajib diisi" }, { status: 400 });
+    const visitSnap = await adminDb.collection("visits").doc(visitId).get();
+    if (!visitSnap.exists || visitSnap.data()?.posyanduId !== auth.posyanduId || visitSnap.data()?.verificationStatus !== "verified") {
+      return NextResponse.json({ error: "Ringkasan hanya dapat dibuat dari kunjungan terverifikasi pada tenant aktif" }, { status: 403 });
+    }
+    const visit = visitSnap.data()!;
+    const measurementSnap = await adminDb.collection("anthropometry_measurements").where("visitId", "==", visitId).limit(1).get();
+    if (measurementSnap.empty) return NextResponse.json({ error: "Data pengukuran tidak ditemukan" }, { status: 404 });
+    const m = measurementSnap.docs[0].data();
+    const payload = buildSafeAiPayload({
+      age_months: Number(m.ageMonths), sex_for_reference: m.sex,
+      visit_date: visit.visitDate,
+      measurements: { weight_kg: m.weightKg, length_height_cm: m.lengthHeightCm, measurement_type: m.measurementType },
+      previous_measurement: null,
+      validated_assessments: [], verified_services: [], next_approved_reminders: [],
+      approved_education_snippets: [],
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const summary = await generateSafeSummary(payload);
+    const ref = await adminDb.collection("ai_summaries").add({
+      posyanduId: auth.posyanduId, guardianUid: visit.guardianUid || null, childId: visit.childId, visitId,
+      inputRecordVersion: visit.version || 1,
+      modelProvider: summary.modelProvider, modelVersion: summary.modelVersion,
+      promptVersion: summary.promptVersion, knowledgeSourceIds: [],
+      generatedText: summary.text, safetyStatus: summary.safetyStatus,
+      reviewStatus: "auto_checked", generatedAt: new Date().toISOString(),
+    });
+    return NextResponse.json({ success: true, summaryId: ref.id, summary: summary.text, safetyStatus: summary.safetyStatus });
+  } catch {
+    return NextResponse.json({ error: "Ringkasan tidak dapat dibuat; gunakan fallback atau hubungi petugas" }, { status: 500 });
   }
 }

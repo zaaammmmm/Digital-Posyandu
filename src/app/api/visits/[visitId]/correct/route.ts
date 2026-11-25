@@ -1,78 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { writeAuditLog } from "@/lib/audit/audit-logger";
+import { requireAuth, isAuthError } from "@/lib/auth/server";
 
-export async function POST(
-  req: NextRequest,
-  context: { params: Promise<{ visitId: string }> }
-) {
-  try {
-    const { visitId } = await context.params;
-    const body = await req.json();
-    const { actorUserId, reason, updatedMeasurements } = body;
-
-    if (!actorUserId || !reason || !updatedMeasurements) {
-      return NextResponse.json(
-        { error: "actorUserId, reason, dan updatedMeasurements wajib diisi" },
-        { status: 400 }
-      );
-    }
-
-    const visitRef = adminDb.collection("visits").doc(visitId);
-    const visitSnap = await visitRef.get();
-
-    if (!visitSnap.exists) {
-      return NextResponse.json({ error: "Kunjungan tidak ditemukan" }, { status: 404 });
-    }
-
-    const visitData = visitSnap.data()!;
-    const measSnap = await adminDb
-      .collection("anthropometry_measurements")
-      .where("visitId", "==", visitId)
-      .limit(1)
-      .get();
-
-    if (measSnap.empty) {
-      return NextResponse.json({ error: "Pengukuran tidak ditemukan" }, { status: 404 });
-    }
-
-    const measDoc = measSnap.docs[0];
-    const oldMeasData = measDoc.data();
-    const nowIso = new Date().toISOString();
-    const nextVersion = (visitData.version ?? 1) + 1;
-
-    await adminDb.runTransaction(async (tx) => {
-      tx.update(visitRef, {
-        verificationStatus: "corrected",
-        version: nextVersion,
-        updatedAt: nowIso,
-      });
-
-      tx.update(measDoc.ref, {
-        weightKg: Number(updatedMeasurements.weightKg ?? oldMeasData.weightKg),
-        lengthHeightCm: Number(updatedMeasurements.lengthHeightCm ?? oldMeasData.lengthHeightCm),
-        verificationStatus: "corrected",
-        updatedAt: nowIso,
-      });
-    });
-
-    await writeAuditLog({
-      actorUserId,
-      action: "CORRECT_VISIT_DATA",
-      resourceType: "visit",
-      resourceId: visitId,
-      beforeSnapshot: oldMeasData,
-      afterSnapshot: updatedMeasurements,
-      reason,
-    });
-
-    return NextResponse.json({
-      success: true,
-      visitId,
-      version: nextVersion,
-      message: "Koreksi berhasil dicatat dalam audit trail.",
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+export async function POST(req: NextRequest, context: { params: Promise<{ visitId: string }> }) {
+  const auth = await requireAuth(req, ["health_worker", "posyandu_admin", "system_admin"]);
+  if (isAuthError(auth)) return auth;
+  const { visitId } = await context.params;
+  const body = await req.json();
+  if (typeof body.reason !== "string" || body.reason.trim().length < 5 || !body.updatedMeasurements || typeof body.updatedMeasurements !== "object") {
+    return NextResponse.json({ error: "Alasan koreksi dan pengukuran baru wajib diisi" }, { status: 400 });
   }
+  const visitRef = adminDb.collection("visits").doc(visitId);
+  const visitSnap = await visitRef.get();
+  if (!visitSnap.exists || visitSnap.data()?.posyanduId !== auth.posyanduId) return NextResponse.json({ error: "Kunjungan tidak ditemukan" }, { status: 404 });
+  const visit = visitSnap.data()!;
+  const measurementSnap = await adminDb.collection("anthropometry_measurements").where("visitId", "==", visitId).get();
+  const oldDoc = measurementSnap.docs
+    .filter(doc => !doc.data().supersededAt)
+    .sort((a, b) => String(b.data().measuredAt || "").localeCompare(String(a.data().measuredAt || "")))[0];
+  if (!oldDoc) return NextResponse.json({ error: "Pengukuran aktif tidak ditemukan" }, { status: 404 });
+  const oldData = oldDoc.data();
+  const update = body.updatedMeasurements as Record<string, unknown>;
+  const weightKg = update.weightKg === undefined ? oldData.weightKg : Number(update.weightKg);
+  const lengthHeightCm = update.lengthHeightCm === undefined ? oldData.lengthHeightCm : Number(update.lengthHeightCm);
+  const measurementType = update.measurementType === undefined ? oldData.measurementType : update.measurementType;
+  if (!Number.isFinite(weightKg) || !Number.isFinite(lengthHeightCm) ||
+      !["recumbent_length", "standing_height"].includes(String(measurementType))) {
+    return NextResponse.json({ error: "Nilai antropometri koreksi tidak valid" }, { status: 400 });
+  }
+  const now = new Date().toISOString();
+  const version = (visit.version || 1) + 1;
+  const newRef = adminDb.collection("anthropometry_measurements").doc();
+  const newData = { ...oldData, weightKg, lengthHeightCm, measurementType,
+    posyanduId: auth.posyanduId, version, supersedesMeasurementId: oldDoc.id,
+    verificationStatus: "pending_verification", qualityFlags: ["CORRECTED_REQUIRES_REVERIFICATION"],
+    measuredAt: now, recordedBy: auth.uid };
+  await adminDb.runTransaction(async tx => {
+    tx.update(oldDoc.ref, { supersededAt: now, supersededBy: newRef.id });
+    tx.set(newRef, newData);
+    tx.update(visitRef, { verificationStatus: "pending_verification", version, updatedAt: now, correctionReason: body.reason.trim() });
+  });
+  await writeAuditLog({ actorUserId: auth.uid, action: "CORRECT_VISIT_DATA", resourceType: "visit",
+    resourceId: visitId, beforeSnapshot: oldData, afterSnapshot: newData, reason: body.reason.trim(), posyanduId: auth.posyanduId });
+  return NextResponse.json({ success: true, visitId, measurementVersion: version, status: "pending_verification" });
 }

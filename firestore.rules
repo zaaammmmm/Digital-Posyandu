@@ -1,70 +1,98 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() {
-      return request.auth != null;
+    function signedIn() { return request.auth != null; }
+    function memberOf(posyanduId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/memberships/$(request.auth.uid + "_" + posyanduId));
     }
-
-    function role() {
-      return request.auth.token.role;
+    function membership(posyanduId) {
+      return get(/databases/$(database)/documents/memberships/$(request.auth.uid + "_" + posyanduId)).data;
     }
-
-    function isStaff() {
-      return isSignedIn() && (
-        role() == 'cadre' ||
-        role() == 'health_worker' ||
-        role() == 'posyandu_admin' ||
-        role() == 'system_admin'
-      );
+    function activeMember(posyanduId) {
+      return memberOf(posyanduId) && membership(posyanduId).status == 'active';
     }
-
+    function roleIn(posyanduId, roles) {
+      return activeMember(posyanduId) && membership(posyanduId).role in roles;
+    }
+    function sameTenant(resourceData) {
+      return signedIn() && resourceData.posyanduId is string &&
+        activeMember(resourceData.posyanduId);
+    }
+    function staffRoles() {
+      return ['cadre', 'health_worker', 'posyandu_admin', 'system_admin'];
+    }
+    match /memberships/{membershipId} {
+      allow read: if signedIn() &&
+        (resource.data.userId == request.auth.uid ||
+         roleIn(resource.data.posyanduId, ['posyandu_admin', 'system_admin']));
+      allow write: if false;
+    }
     match /posyandus/{posyanduId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && (role() == 'posyandu_admin' || role() == 'system_admin');
+      allow read: if activeMember(posyanduId);
+      allow write: if roleIn(posyanduId, ['posyandu_admin', 'system_admin']);
     }
-
     match /children/{childId} {
-      allow read: if isStaff() ||
-        (isSignedIn() && role() == 'parent' && resource.data.guardianUid == request.auth.uid);
-      allow create, update: if isSignedIn() && (role() == 'cadre' || role() == 'posyandu_admin');
+      allow read: if sameTenant(resource.data) &&
+        (roleIn(resource.data.posyanduId, staffRoles()) ||
+         (roleIn(resource.data.posyanduId, ['parent']) &&
+          resource.data.guardianUids is list &&
+          request.auth.uid in resource.data.guardianUids));
+      allow create: if request.resource.data.posyanduId is string &&
+        roleIn(request.resource.data.posyanduId, ['cadre', 'posyandu_admin']);
+      allow update: if sameTenant(resource.data) &&
+        roleIn(resource.data.posyanduId, ['cadre', 'posyandu_admin']) &&
+        request.resource.data.posyanduId == resource.data.posyanduId;
       allow delete: if false;
     }
-
     match /visits/{visitId} {
-      allow read: if isStaff() ||
-        (isSignedIn() && role() == 'parent' && resource.data.guardianUid == request.auth.uid);
-      allow create: if isSignedIn() && (role() == 'cadre' || role() == 'health_worker');
-      allow update, delete: if false; // Status verifikasi & koreksi wajib lewat Admin SDK
-    }
-
-    match /anthropometry_measurements/{measId} {
-      allow read: if isStaff() || (isSignedIn() && role() == 'parent');
-      allow create: if isSignedIn() && (role() == 'cadre' || role() == 'health_worker');
+      allow read: if sameTenant(resource.data) &&
+        (roleIn(resource.data.posyanduId, staffRoles()) ||
+         roleIn(resource.data.posyanduId, ['parent']) &&
+         resource.data.guardianUid == request.auth.uid);
+      allow create: if request.resource.data.posyanduId is string &&
+        roleIn(request.resource.data.posyanduId, ['cadre', 'health_worker']);
       allow update, delete: if false;
     }
-
-    match /growth_assessments/{assessId} {
-      allow read: if isStaff() || (isSignedIn() && role() == 'parent');
-      allow write: if false; // Modul deterministik server-side
+    match /anthropometry_measurements/{measurementId} {
+      allow read: if signedIn() &&
+        exists(/databases/$(database)/documents/visits/$(resource.data.visitId)) &&
+        sameTenant(get(/databases/$(database)/documents/visits/$(resource.data.visitId)).data) &&
+        (roleIn(get(/databases/$(database)/documents/visits/$(resource.data.visitId)).data.posyanduId, staffRoles()) ||
+         get(/databases/$(database)/documents/visits/$(resource.data.visitId)).data.guardianUid == request.auth.uid);
+      allow create, update, delete: if false;
     }
-
-    match /ai_summaries/{summaryId} {
-      allow read: if isStaff() || (isSignedIn() && role() == 'parent');
-      allow write: if false; // Server-side safety pipeline
+    match /growth_assessments/{id} {
+      allow read: if signedIn() && resource.data.posyanduId is string &&
+        activeMember(resource.data.posyanduId) &&
+        (roleIn(resource.data.posyanduId, staffRoles()) || resource.data.guardianUid == request.auth.uid);
+      allow write: if false;
     }
-
-    match /audit_logs/{logId} {
-      allow read: if isSignedIn() && (role() == 'posyandu_admin' || role() == 'health_worker' || role() == 'system_admin');
-      allow write: if false; // Audit trail immutable
+    match /ai_summaries/{id} {
+      allow read: if signedIn() && resource.data.posyanduId is string &&
+        activeMember(resource.data.posyanduId) &&
+        (roleIn(resource.data.posyanduId, staffRoles()) || resource.data.guardianUid == request.auth.uid);
+      allow write: if false;
     }
-
-    match /administrative_records/{recId} {
-      allow read, write: if isStaff();
+    match /audit_logs/{id} {
+      allow read: if signedIn() && resource.data.posyanduId is string &&
+        roleIn(resource.data.posyanduId, ['posyandu_admin', 'health_worker', 'system_admin']);
+      allow write: if false;
     }
-
-    match /education_content/{eduId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && (role() == 'content_reviewer' || role() == 'system_admin');
+    match /administrative_records/{id} {
+      allow read: if sameTenant(resource.data) &&
+        roleIn(resource.data.posyanduId, staffRoles());
+      allow create: if request.resource.data.posyanduId is string &&
+        roleIn(request.resource.data.posyanduId, ['cadre', 'posyandu_admin']);
+      allow update: if sameTenant(resource.data) &&
+        roleIn(resource.data.posyanduId, ['cadre', 'posyandu_admin']) &&
+        request.resource.data.posyanduId == resource.data.posyanduId;
+      allow delete: if false;
     }
+    match /education_content/{id} {
+      allow read: if signedIn() && resource.data.status == 'published';
+      allow write: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
   }
 }

@@ -21,14 +21,15 @@ export const VisitForm: React.FC<{ childId: string; posyanduId: string }> = ({
     setIsError(false);
 
     try {
+      const idToken = await (await import("@/lib/firebase/client")).auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error("Silakan login kembali.");
       const res = await fetch("/api/visits", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}`, "x-posyandu-id": posyanduId },
         body: JSON.stringify({
           childId,
           posyanduId,
-          recordedBy: "kader-1",
-          ageMonths: 18,
+
           measurements: {
             weightKg: Number(weightKg),
             lengthHeightCm: Number(lengthHeightCm),

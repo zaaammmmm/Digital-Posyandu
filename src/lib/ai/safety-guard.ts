@@ -45,7 +45,7 @@ export function buildFallbackSummary(payload: {
   return (
     `Pada kunjungan tanggal ${payload.visit_date}, berat badan anak tercatat ${payload.weight_kg} kg ` +
     `dan panjang/tinggi badan ${payload.length_height_cm} cm.${diffStr} ` +
-    `Posisi grafik pertumbuhan dihitung berdasarkan standar baku resmi. ` +
+    `Interpretasi pertumbuhan belum tersedia karena referensi standar tervalidasi belum dikonfigurasi. ` +
     `Catatan ini merupakan sarana pemantauan berkala dan bukan diagnosis medis. ` +
     `Untuk informasi pertumbuhan lebih lanjut, silakan berkonsultasi dengan bidan atau petugas Posyandu.`
   );
