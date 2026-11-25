@@ -15,9 +15,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Ringkasan hanya dapat dibuat dari kunjungan terverifikasi pada tenant aktif" }, { status: 403 });
     }
     const visit = visitSnap.data()!;
-    const measurementSnap = await adminDb.collection("anthropometry_measurements").where("visitId", "==", visitId).limit(1).get();
-    if (measurementSnap.empty) return NextResponse.json({ error: "Data pengukuran tidak ditemukan" }, { status: 404 });
-    const m = measurementSnap.docs[0].data();
+    const measurementSnap = await adminDb.collection("anthropometry_measurements")
+      .where("visitId", "==", visitId).get();
+    const activeVerifiedMeasurement = measurementSnap.docs
+      .filter(doc => !doc.data().supersededAt && doc.data().verificationStatus === "verified")
+      .sort((a, b) => String(b.data().measuredAt || "").localeCompare(String(a.data().measuredAt || "")))[0];
+    if (!activeVerifiedMeasurement) {
+      return NextResponse.json({ error: "Pengukuran aktif yang sudah diverifikasi tidak ditemukan" }, { status: 404 });
+    }
+    const m = activeVerifiedMeasurement.data();
     const payload = buildSafeAiPayload({
       age_months: Number(m.ageMonths), sex_for_reference: m.sex,
       visit_date: visit.visitDate,

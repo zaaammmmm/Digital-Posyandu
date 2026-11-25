@@ -19,7 +19,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(req, ["parent", "cadre", "posyandu_admin"]);
+  // Consent must be an explicit action by an authenticated guardian.
+  // Staff cannot create a consent record attributed to themselves on a child's behalf.
+  const auth = await requireAuth(req, ["parent"]);
   if (isAuthError(auth)) return auth;
   const body = await req.json();
   const { childId, purpose, noticeVersion, consentStatus } = body;
@@ -30,11 +32,11 @@ export async function POST(req: NextRequest) {
   const childRef = adminDb.collection("children").doc(childId);
   const child = await childRef.get();
   if (!child.exists || child.data()?.posyanduId !== auth.posyanduId) return NextResponse.json({ error: "Anak tidak ditemukan" }, { status: 404 });
-  if (auth.role === "parent" && !(child.data()?.guardianUids || []).includes(auth.uid)) return NextResponse.json({ error: "Wali tidak berwenang" }, { status: 403 });
+  if (!(child.data()?.guardianUids || []).includes(auth.uid)) return NextResponse.json({ error: "Wali tidak berwenang" }, { status: 403 });
   const now = new Date().toISOString();
   const ref = adminDb.collection("consent_records").doc();
   await ref.set({
-    posyanduId: auth.posyanduId, childId, guardianUid: auth.uid,
+    posyanduId: auth.posyanduId, childId, guardianUid: auth.uid, capturedBy: auth.uid,
     purpose, noticeVersion, consentStatus, capturedAt: now,
     withdrawnAt: consentStatus === "withdrawn" ? now : null,
     createdBy: auth.uid,

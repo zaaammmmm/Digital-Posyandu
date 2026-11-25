@@ -17,10 +17,17 @@ export async function POST(req: NextRequest) {
     if (decoded.role !== "system_admin" && memberships.empty) {
       return NextResponse.json({ error: "Keanggotaan Posyandu tidak aktif" }, { status: 403 });
     }
+    const membershipRole = memberships.docs[0]?.data().role;
+    const validRoles = ["parent", "cadre", "health_worker", "posyandu_admin", "content_reviewer"];
+    if (decoded.role !== "system_admin" &&
+        (typeof membershipRole !== "string" || !validRoles.includes(membershipRole) ||
+         (decoded.role && decoded.role !== membershipRole))) {
+      return NextResponse.json({ error: "Role akun dan membership tidak sesuai" }, { status: 403 });
+    }
     const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn: SESSION_DURATION_MS });
     const response = NextResponse.json({
       success: true, uid: decoded.uid,
-      role: decoded.role || memberships.docs[0]?.data().role, posyanduId,
+      role: decoded.role === "system_admin" ? "system_admin" : membershipRole, posyanduId,
     });
     response.cookies.set("__session", sessionCookie, {
       httpOnly: true, secure: process.env.NODE_ENV === "production",

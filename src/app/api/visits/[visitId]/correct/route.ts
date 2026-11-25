@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { calculateAgeMonths } from "@/lib/growth/age";
+import { validateAnthropometry } from "@/lib/growth/anthropometry-validator";
 import { writeAuditLog } from "@/lib/audit/audit-logger";
 import { requireAuth, isAuthError } from "@/lib/auth/server";
 
@@ -21,6 +23,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ visitI
     .sort((a, b) => String(b.data().measuredAt || "").localeCompare(String(a.data().measuredAt || "")))[0];
   if (!oldDoc) return NextResponse.json({ error: "Pengukuran aktif tidak ditemukan" }, { status: 404 });
   const oldData = oldDoc.data();
+  const childSnap = await adminDb.collection("children").doc(String(visit.childId)).get();
+  if (!childSnap.exists || childSnap.data()?.posyanduId !== auth.posyanduId) return NextResponse.json({ error: "Profil anak tidak ditemukan pada tenant aktif" }, { status: 404 });
   const update = body.updatedMeasurements as Record<string, unknown>;
   const weightKg = update.weightKg === undefined ? oldData.weightKg : Number(update.weightKg);
   const lengthHeightCm = update.lengthHeightCm === undefined ? oldData.lengthHeightCm : Number(update.lengthHeightCm);
@@ -29,12 +33,17 @@ export async function POST(req: NextRequest, context: { params: Promise<{ visitI
       !["recumbent_length", "standing_height"].includes(String(measurementType))) {
     return NextResponse.json({ error: "Nilai antropometri koreksi tidak valid" }, { status: 400 });
   }
+  const ageMonths = calculateAgeMonths(String(childSnap.data()!.dateOfBirth), visit.visitDate);
+  const validation = validateAnthropometry({ ageMonths, weightKg, lengthHeightCm,
+    measurementType: measurementType as "recumbent_length" | "standing_height" });
   const now = new Date().toISOString();
   const version = (visit.version || 1) + 1;
   const newRef = adminDb.collection("anthropometry_measurements").doc();
   const newData = { ...oldData, weightKg, lengthHeightCm, measurementType,
     posyanduId: auth.posyanduId, version, supersedesMeasurementId: oldDoc.id,
-    verificationStatus: "pending_verification", qualityFlags: ["CORRECTED_REQUIRES_REVERIFICATION"],
+    ageMonths, sex: childSnap.data()!.sex,
+    verificationStatus: "pending_verification",
+    qualityFlags: [...validation.qualityFlags, "CORRECTED_REQUIRES_REVERIFICATION"],
     measuredAt: now, recordedBy: auth.uid };
   await adminDb.runTransaction(async tx => {
     tx.update(oldDoc.ref, { supersededAt: now, supersededBy: newRef.id });
