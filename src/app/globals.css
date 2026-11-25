@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --surface-canvas: #f6f8f7;
+    --surface-card: #ffffff;
+    --surface-muted: #f1f5f3;
+    --brand-primary: #087f5b;
+    --brand-primary-hover: #066b4d;
+    --brand-soft: #e8f5ef;
+    --ink: #17231f;
+    --muted: #718078;
+    --line: #e5ece8;
+    --focus: rgba(8, 127, 91, .18);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    min-height: 100vh;
+    background: var(--surface-canvas);
+    color: var(--ink);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button, a, input, select, textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  ::selection { background: #ccebdd; color: #123d2e; }
+}
+
+@layer components {
+  .posyandu-card {
+    @apply rounded-2xl border bg-white;
+    border-color: var(--line);
+    box-shadow: 0 1px 2px rgba(20, 43, 33, .025), 0 8px 24px rgba(20, 43, 33, .035);
+    transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+  }
+
+  .posyandu-card-interactive {
+    @apply posyandu-card;
+  }
+  .posyandu-card-interactive:hover {
+    border-color: #b8d9ca;
+    box-shadow: 0 8px 28px rgba(20, 75, 52, .08);
+    transform: translateY(-2px);
+  }
+
+  .posyandu-input {
+    @apply block w-full rounded-xl bg-white px-3.5 py-3 text-sm text-slate-800 placeholder:text-slate-400;
+    border: 1px solid #dce6e0;
+    box-shadow: 0 1px 2px rgba(20, 43, 33, .025);
+    transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+  }
+  .posyandu-input:hover { border-color: #b8cfc2; }
+  .posyandu-input:focus {
+    border-color: var(--brand-primary);
+    outline: none;
+    box-shadow: 0 0 0 4px var(--focus);
+  }
+  .posyandu-input:disabled { background: #f4f7f5; color: #8a9991; cursor: not-allowed; }
+  textarea.posyandu-input { min-height: 104px; line-height: 1.6; }
+
+  .posyandu-label {
+    @apply mb-2 block text-xs font-semibold tracking-wide text-slate-600;
+  }
+
+  .posyandu-page-header {
+    @apply flex flex-col gap-2 border-b pb-5 sm:flex-row sm:items-end sm:justify-between;
+    border-color: var(--line);
+  }
+  .posyandu-page-title {
+    @apply text-xl font-bold tracking-tight text-slate-900 sm:text-2xl;
+    line-height: 1.25;
+  }
+  .posyandu-page-subtitle { @apply mt-1 text-sm leading-relaxed text-slate-500; }
+
+  .posyandu-table-wrap {
+    @apply overflow-x-auto rounded-2xl border bg-white;
+    border-color: var(--line);
+    box-shadow: 0 1px 2px rgba(20, 43, 33, .025), 0 8px 24px rgba(20, 43, 33, .025);
+  }
+  .posyandu-table { @apply w-full border-collapse text-left text-sm; }
+  .posyandu-thead {
+    @apply border-b text-[11px] font-bold uppercase tracking-wider text-slate-500;
+    background: #f7faf8;
+    border-color: var(--line);
+  }
+  .posyandu-th { @apply whitespace-nowrap px-4 py-3.5; }
+  .posyandu-td { @apply border-b border-slate-100 px-4 py-3.5 align-middle text-slate-600; }
+  .posyandu-table tbody tr:last-child .posyandu-td { @apply border-b-0; }
+  .posyandu-table tbody tr { transition: background .15s ease; }
+  .posyandu-table tbody tr:hover { background: #f8fbf9; }
+
+  .posyandu-section-title { @apply text-base font-semibold tracking-tight text-slate-900; }
+}
+
+/* Consistent dashboard shell and content rhythm across every role page. */
+.dashboard-shell { min-height: 100vh; background: var(--surface-canvas); }
+.dashboard-header {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  min-height: 68px; padding: .75rem clamp(1rem, 4vw, 2.5rem);
+  background: rgba(255,255,255,.9); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--line);
+}
+.dashboard-brand { display: flex; align-items: center; gap: .7rem; min-width: 0; }
+.dashboard-brand-name { color: #126348; font-size: 1.05rem; font-weight: 750; letter-spacing: -.035em; white-space: nowrap; }
+.dashboard-brand-tag {
+  border: 1px solid #d6e9df; border-radius: 999px; padding: .28rem .6rem;
+  color: #34765c; background: #f0f8f3; font-size: .68rem; font-weight: 650; white-space: nowrap;
+}
+.dashboard-nav { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem; }
+.dashboard-nav a {
+  border-radius: .7rem; padding: .55rem .75rem; color: #5f7067;
+  font-size: .78rem; font-weight: 650; text-decoration: none; transition: .18s ease;
+}
+.dashboard-nav a:hover { background: #edf6f0; color: #126348; }
+.dashboard-nav a:last-child { color: #a34c4c; }
+.dashboard-nav a:last-child:hover { background: #fff1f0; }
+.dashboard-main { width: min(100% - 2rem, 1160px); margin-inline: auto; padding-block: clamp(1.5rem, 3vw, 2.5rem); }
+.dashboard-main > * { min-width: 0; }
+
+/* Form and native-control polish for pages that use utility classes directly. */
+input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+  accent-color: var(--brand-primary);
+}
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+/* Keep chart tooltips and legends visually aligned with the design system. */
+.recharts-default-tooltip { border: 1px solid var(--line) !important; border-radius: 12px !important; box-shadow: 0 8px 24px rgba(20,43,33,.08) !important; }
+
+@media (max-width: 700px) {
+  .dashboard-header { align-items: flex-start; flex-direction: column; gap: .65rem; padding-block: .8rem; }
+  .dashboard-nav { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: .15rem; }
+  .dashboard-nav a { flex: 0 0 auto; }
+  .dashboard-main { width: min(100% - 1.25rem, 1160px); padding-block: 1.25rem; }
+  .posyandu-table { min-width: 620px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}

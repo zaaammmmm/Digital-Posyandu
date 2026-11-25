@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return request.auth.token.role;
+    }
+
+    function isStaff() {
+      return isSignedIn() && (
+        role() == 'cadre' ||
+        role() == 'health_worker' ||
+        role() == 'posyandu_admin' ||
+        role() == 'system_admin'
+      );
+    }
+
+    match /posyandus/{posyanduId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (role() == 'posyandu_admin' || role() == 'system_admin');
+    }
+
+    match /children/{childId} {
+      allow read: if isStaff() ||
+        (isSignedIn() && role() == 'parent' && resource.data.guardianUid == request.auth.uid);
+      allow create, update: if isSignedIn() && (role() == 'cadre' || role() == 'posyandu_admin');
+      allow delete: if false;
+    }
+
+    match /visits/{visitId} {
+      allow read: if isStaff() ||
+        (isSignedIn() && role() == 'parent' && resource.data.guardianUid == request.auth.uid);
+      allow create: if isSignedIn() && (role() == 'cadre' || role() == 'health_worker');
+      allow update, delete: if false; // Status verifikasi & koreksi wajib lewat Admin SDK
+    }
+
+    match /anthropometry_measurements/{measId} {
+      allow read: if isStaff() || (isSignedIn() && role() == 'parent');
+      allow create: if isSignedIn() && (role() == 'cadre' || role() == 'health_worker');
+      allow update, delete: if false;
+    }
+
+    match /growth_assessments/{assessId} {
+      allow read: if isStaff() || (isSignedIn() && role() == 'parent');
+      allow write: if false; // Modul deterministik server-side
+    }
+
+    match /ai_summaries/{summaryId} {
+      allow read: if isStaff() || (isSignedIn() && role() == 'parent');
+      allow write: if false; // Server-side safety pipeline
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isSignedIn() && (role() == 'posyandu_admin' || role() == 'health_worker' || role() == 'system_admin');
+      allow write: if false; // Audit trail immutable
+    }
+
+    match /administrative_records/{recId} {
+      allow read, write: if isStaff();
+    }
+
+    match /education_content/{eduId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (role() == 'content_reviewer' || role() == 'system_admin');
+    }
+  }
+}

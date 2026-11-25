@@ -1,0 +1,64 @@
+import React from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/Button";
+
+export default function CadreDashboard() {
+  return (
+    <div className="space-y-6">
+      <div className="posyandu-page-header">
+        <div>
+          <h1 className="posyandu-page-title">Dashboard Kader Posyandu</h1>
+          <p className="posyandu-page-subtitle">
+            Rekap pelayanan hari kegiatan & administrasi terpadu
+          </p>
+        </div>
+        <Link href="/cadre/children/new">
+          <Button>+ Daftarkan Anak</Button>
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-slate-400">
+          <p className="text-xs font-medium text-slate-500">Sasaran Terdaftar</p>
+          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1.5">45</p>
+        </div>
+        <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-emerald-600">
+          <p className="text-xs font-medium text-slate-500">Hadir Hari Ini</p>
+          <p className="text-2xl sm:text-3xl font-bold text-emerald-700 mt-1.5">28</p>
+        </div>
+        <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-amber-500">
+          <p className="text-xs font-medium text-slate-500">Menunggu Verifikasi</p>
+          <p className="text-2xl sm:text-3xl font-bold text-amber-700 mt-1.5">5</p>
+        </div>
+        <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-rose-500">
+          <p className="text-xs font-medium text-slate-500">Tindak Lanjut</p>
+          <p className="text-2xl sm:text-3xl font-bold text-rose-700 mt-1.5">2</p>
+        </div>
+      </div>
+
+      <div className="posyandu-card p-5 sm:p-6 space-y-3.5">
+        <h3 className="font-bold text-sm text-slate-900">Akses Cepat Modul Kader</h3>
+        <div className="flex flex-wrap gap-2.5 text-xs font-semibold">
+          <Link
+            href="/cadre/children"
+            className="px-3.5 py-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 rounded-xl transition"
+          >
+            Daftar Anak
+          </Link>
+          <Link
+            href="/cadre/administration"
+            className="px-3.5 py-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 rounded-xl transition"
+          >
+            Buku Administrasi (Kegiatan, Hadir, Notulen)
+          </Link>
+          <Link
+            href="/cadre/guides"
+            className="px-3.5 py-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 rounded-xl transition"
+          >
+            Pusat Panduan Keterampilan Kader
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
