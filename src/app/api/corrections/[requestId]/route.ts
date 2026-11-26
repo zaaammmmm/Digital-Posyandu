@@ -16,19 +16,24 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ reque
   }
   const { requestId } = await context.params;
   const ref = adminDb.collection("correction_requests").doc(requestId);
-  const snap = await ref.get();
-  if (!snap.exists || snap.data()?.posyanduId !== auth.posyanduId) {
-    return NextResponse.json({ error: "Permintaan koreksi tidak ditemukan" }, { status: 404 });
-  }
-  const before = snap.data()!;
-  if (before.status !== "pending_review") {
-    return NextResponse.json({ error: "Permintaan ini sudah ditinjau" }, { status: 409 });
-  }
   const now = new Date().toISOString();
   const status = body.decision === "accepted" ? "accepted_pending_correction" : "rejected";
-  await ref.update({ status, reviewedBy: auth.uid, reviewedAt: now, reviewNote: note.slice(0, 2000) });
-  await writeAuditLog({ actorUserId: auth.uid, action: "REVIEW_CORRECTION_REQUEST", resourceType: "correction_request",
-    resourceId: requestId, beforeSnapshot: { status: before.status }, afterSnapshot: { status }, reason: note.slice(0, 2000),
-    posyanduId: auth.posyanduId });
+  try {
+    await adminDb.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists || snap.data()?.posyanduId !== auth.posyanduId) throw new Error("NOT_FOUND");
+      const before = snap.data()!;
+      if (before.status !== "pending_review") throw new Error("NOT_PENDING");
+      tx.update(ref, { status, reviewedBy: auth.uid, reviewedAt: now, reviewNote: note.slice(0, 2000) });
+      await writeAuditLog({ actorUserId: auth.uid, action: "REVIEW_CORRECTION_REQUEST", resourceType: "correction_request",
+        resourceId: requestId, beforeSnapshot: { status: before.status }, afterSnapshot: { status }, reason: note.slice(0, 2000),
+        posyanduId: auth.posyanduId }, tx);
+    });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    if (code === "NOT_FOUND") return NextResponse.json({ error: "Permintaan koreksi tidak ditemukan" }, { status: 404 });
+    if (code === "NOT_PENDING") return NextResponse.json({ error: "Permintaan ini sudah ditinjau" }, { status: 409 });
+    throw error;
+  }
   return NextResponse.json({ success: true, requestId, status });
 }

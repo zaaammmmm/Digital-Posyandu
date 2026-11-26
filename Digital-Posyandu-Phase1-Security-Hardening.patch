@@ -1,0 +1,261 @@
+diff --git a/.env.example b/.env.example
+index a4e2a24..f98e430 100644
+--- a/.env.example
++++ b/.env.example
+@@ -11,7 +11,7 @@ FIREBASE_ADMIN_PROJECT_ID=your-project-id
+ FIREBASE_ADMIN_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.com
+ FIREBASE_ADMIN_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_KEY\n-----END PRIVATE KEY-----\n"
+ 
+-# Security & Encryption (AES-256-GCM - exactly 32 bytes hex or base64)
++# Security & Encryption (AES-256-GCM - exactly 32 bytes encoded as 64 hexadecimal characters)
+ FIELD_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+ 
+ # Optional LLM API Key (Gemini)
+diff --git a/docs/PHASE-1-SECURITY-HARDENING.md b/docs/PHASE-1-SECURITY-HARDENING.md
+new file mode 100644
+index 0000000..fd429dc
+--- /dev/null
++++ b/docs/PHASE-1-SECURITY-HARDENING.md
+@@ -0,0 +1,58 @@
++# Phase 1 — Security & Privacy Hardening
++
++Patch ini memperkuat beberapa kontrol aplikasi yang dapat ditegakkan langsung dari repository. Patch ini **bukan** bukti bahwa seluruh kontrol keamanan operasional telah selesai.
++
++## Perubahan kode
++
++1. `requireAuth()` menerapkan baseline rate limit untuk semua request API terautentikasi selain GET/HEAD/OPTIONS: 120 write per pengguna per 60 detik. Batas khusus pada endpoint AI dan consent tetap berlaku sebagai lapisan tambahan.
++2. Review permintaan koreksi menjalankan pembacaan status, perubahan keputusan, dan pencatatan audit dalam satu transaksi Firestore.
++3. Penolakan verifikasi kunjungan menjalankan pembacaan kunjungan/pengukuran, perubahan status kunjungan/pengukuran, dan pencatatan audit dalam satu transaksi Firestore.
++4. Production preflight memvalidasi `FIELD_ENCRYPTION_KEY` dengan format yang benar-benar diterima implementasi AES-256-GCM: tepat 64 karakter hex.
++5. Test statis menjaga agar kontrol di atas tidak terhapus tanpa disadari.
++
++## Batasan yang tetap harus diselesaikan sebelum produksi
++
++### Firebase Emulator Rules tests
++
++`tests/security-hardening.test.ts` dan `tests/role-access.test.ts` adalah test statis kode, **bukan** Firebase Rules Unit Testing. Sebelum produksi, tambahkan test emulator memakai `@firebase/rules-unit-testing` dan jalankan terhadap `firestore.rules` untuk:
++
++- enam role: parent, cadre, health_worker, posyandu_admin, content_reviewer, system_admin;
++- akses tenant sendiri dan tenant lain;
++- kepemilikan anak oleh guardian;
++- akses reviewer ke knowledge dan aturan approved;
++- penolakan seluruh direct client writes ke data klinis, consent, membership, dan audit.
++
++Jalankan emulator dengan `npm run emulators` dan jalankan suite Rules khusus pada CI. Jangan menandai gate ini lulus hanya dari test statis.
++
++### Audit log append-only
++
++Firestore Security Rules menolak client writes, tetapi Admin SDK tetap dapat mengubah dokumen. Terapkan IAM least-privilege pada service account produksi: aplikasi hanya memerlukan create/read untuk koleksi audit sejauh arsitektur memungkinkan; pisahkan akun untuk operasi retensi/arsip; ekspor audit ke penyimpanan dengan retention lock/WORM bila diwajibkan kebijakan organisasi. Uji bahwa kredensial runtime tidak dapat menghapus atau mengubah audit lama. Hash di aplikasi saja bukan pengganti IAM/WORM.
++
++### Backup, restore, retensi, dan incident response
++
++Sebelum produksi, dokumentasikan dan buktikan:
++
++- backup Firestore terenkripsi dengan jadwal, retensi, pemilik, dan lokasi yang disetujui;
++- restore drill berkala ke project non-produksi, termasuk verifikasi jumlah dokumen dan akses;
++- retensi/penghapusan data anak dan bukti pemenuhan permintaan subjek data;
++- prosedur insiden: triase, containment, rotasi kredensial, pemulihan, dokumentasi, dan notifikasi sesuai kewajiban organisasi;
++- monitoring kegagalan autentikasi, lonjakan 429, kegagalan enkripsi, dan aktivitas administratif.
++
++### Enkripsi field
++
++Saat ini implementasi guardian menyimpan `contactEncrypted`, tetapi jangan menganggap seluruh PII/PHI telah terenkripsi. Inventarisasi field sensitif, seluruh jalur create/update/read/export, kebutuhan dekripsi, rotasi key, dan migrasi data lama. Jangan mengganti `FIELD_ENCRYPTION_KEY` pada produksi tanpa prosedur rotasi dan uji pemulihan.
++
++## Dampak rate limit
++
++Baseline 120 write per user per 60 detik diterapkan pada API yang memakai `requireAuth()`. Integrasi sinkronisasi batch di masa depan harus memiliki batas batch dan strategi retry/backoff; jangan menaikkan limit tanpa pengujian beban. Dokumen `_rate_limits` perlu kebijakan TTL/retensi operasional.
++
++## Verifikasi lokal
++
++```bash
++npm run typecheck
++npm test
++npm run build
++npm run emulators
++```
++
++Build/test yang lulus tidak menggantikan Firebase Emulator Rules tests, restore drill, review IAM, atau validasi keamanan independen.
+diff --git a/scripts/production-preflight.mjs b/scripts/production-preflight.mjs
+index bb65a6b..eda33b6 100644
+--- a/scripts/production-preflight.mjs
++++ b/scripts/production-preflight.mjs
+@@ -15,8 +15,8 @@ if (process.env.NODE_ENV !== "production") problems.push("NODE_ENV harus product
+ if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.startsWith("https://")) {
+   problems.push("NEXT_PUBLIC_APP_URL harus menggunakan HTTPS.");
+ }
+-if (process.env.FIELD_ENCRYPTION_KEY && process.env.FIELD_ENCRYPTION_KEY.length < 32) {
+-  problems.push("FIELD_ENCRYPTION_KEY tampak terlalu pendek; gunakan secret acak yang kuat.");
++if (process.env.FIELD_ENCRYPTION_KEY && !/^[a-fA-F0-9]{64}$/.test(process.env.FIELD_ENCRYPTION_KEY)) {
++  problems.push("FIELD_ENCRYPTION_KEY harus tepat 64 karakter hex (32 byte) sesuai implementasi AES-256-GCM.");
+ }
+ if (missing.length) problems.push(`Environment wajib belum tersedia: ${missing.join(", ")}`);
+ 
+diff --git a/src/app/api/corrections/[requestId]/route.ts b/src/app/api/corrections/[requestId]/route.ts
+index eb08cd8..d9d003a 100644
+--- a/src/app/api/corrections/[requestId]/route.ts
++++ b/src/app/api/corrections/[requestId]/route.ts
+@@ -16,19 +16,24 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ reque
+   }
+   const { requestId } = await context.params;
+   const ref = adminDb.collection("correction_requests").doc(requestId);
+-  const snap = await ref.get();
+-  if (!snap.exists || snap.data()?.posyanduId !== auth.posyanduId) {
+-    return NextResponse.json({ error: "Permintaan koreksi tidak ditemukan" }, { status: 404 });
+-  }
+-  const before = snap.data()!;
+-  if (before.status !== "pending_review") {
+-    return NextResponse.json({ error: "Permintaan ini sudah ditinjau" }, { status: 409 });
+-  }
+   const now = new Date().toISOString();
+   const status = body.decision === "accepted" ? "accepted_pending_correction" : "rejected";
+-  await ref.update({ status, reviewedBy: auth.uid, reviewedAt: now, reviewNote: note.slice(0, 2000) });
+-  await writeAuditLog({ actorUserId: auth.uid, action: "REVIEW_CORRECTION_REQUEST", resourceType: "correction_request",
+-    resourceId: requestId, beforeSnapshot: { status: before.status }, afterSnapshot: { status }, reason: note.slice(0, 2000),
+-    posyanduId: auth.posyanduId });
++  try {
++    await adminDb.runTransaction(async tx => {
++      const snap = await tx.get(ref);
++      if (!snap.exists || snap.data()?.posyanduId !== auth.posyanduId) throw new Error("NOT_FOUND");
++      const before = snap.data()!;
++      if (before.status !== "pending_review") throw new Error("NOT_PENDING");
++      tx.update(ref, { status, reviewedBy: auth.uid, reviewedAt: now, reviewNote: note.slice(0, 2000) });
++      await writeAuditLog({ actorUserId: auth.uid, action: "REVIEW_CORRECTION_REQUEST", resourceType: "correction_request",
++        resourceId: requestId, beforeSnapshot: { status: before.status }, afterSnapshot: { status }, reason: note.slice(0, 2000),
++        posyanduId: auth.posyanduId }, tx);
++    });
++  } catch (error) {
++    const code = error instanceof Error ? error.message : "";
++    if (code === "NOT_FOUND") return NextResponse.json({ error: "Permintaan koreksi tidak ditemukan" }, { status: 404 });
++    if (code === "NOT_PENDING") return NextResponse.json({ error: "Permintaan ini sudah ditinjau" }, { status: 409 });
++    throw error;
++  }
+   return NextResponse.json({ success: true, requestId, status });
+ }
+diff --git a/src/app/api/visits/[visitId]/reject/route.ts b/src/app/api/visits/[visitId]/reject/route.ts
+index 74249a5..b557e82 100644
+--- a/src/app/api/visits/[visitId]/reject/route.ts
++++ b/src/app/api/visits/[visitId]/reject/route.ts
+@@ -13,26 +13,32 @@ export async function POST(req: NextRequest, context: { params: Promise<{ visitI
+   if (reason.length < 5) return NextResponse.json({ error: "Alasan penolakan minimal 5 karakter" }, { status: 400 });
+   const { visitId } = await context.params;
+   const visitRef = adminDb.collection("visits").doc(visitId);
+-  const visitSnap = await visitRef.get();
+-  if (!visitSnap.exists || visitSnap.data()?.posyanduId !== auth.posyanduId) {
+-    return NextResponse.json({ error: "Kunjungan tidak ditemukan" }, { status: 404 });
+-  }
+-  const visit = visitSnap.data()!;
+-  if (visit.verificationStatus !== "pending_verification") {
+-    return NextResponse.json({ error: "Hanya kunjungan menunggu verifikasi yang dapat ditolak" }, { status: 409 });
+-  }
+   const now = new Date().toISOString();
+-  const version = (visit.version || 1) + 1;
+-  const measSnap = await adminDb.collection("anthropometry_measurements").where("visitId", "==", visitId).get();
+-  await adminDb.runTransaction(async tx => {
+-    tx.update(visitRef, { verificationStatus: "needs_correction", rejectionReason: reason,
+-      rejectedBy: auth.uid, rejectedAt: now, version, updatedAt: now });
+-    for (const doc of measSnap.docs) {
+-      if (!doc.data().supersededAt) tx.update(doc.ref, { verificationStatus: "needs_correction", updatedAt: now });
+-    }
+-  });
+-  await writeAuditLog({ actorUserId: auth.uid, action: "REJECT_VISIT_VERIFICATION", resourceType: "visit",
+-    resourceId: visitId, beforeSnapshot: { verificationStatus: visit.verificationStatus },
+-    afterSnapshot: { verificationStatus: "needs_correction", version }, reason, posyanduId: auth.posyanduId });
++  let version = 1;
++  try {
++    await adminDb.runTransaction(async tx => {
++      const visitSnap = await tx.get(visitRef);
++      if (!visitSnap.exists || visitSnap.data()?.posyanduId !== auth.posyanduId) throw new Error("NOT_FOUND");
++      const visit = visitSnap.data()!;
++      if (visit.verificationStatus !== "pending_verification") throw new Error("NOT_PENDING");
++      const measurementQuery = adminDb.collection("anthropometry_measurements").where("visitId", "==", visitId);
++      const measurements = await tx.get(measurementQuery);
++      version = (Number(visit.version) || 1) + 1;
++      tx.update(visitRef, { verificationStatus: "needs_correction", rejectionReason: reason,
++        rejectedBy: auth.uid, rejectedAt: now, version, updatedAt: now });
++      for (const doc of measurements.docs) {
++        if (!doc.data().supersededAt) tx.update(doc.ref, { verificationStatus: "needs_correction", updatedAt: now });
++      }
++      await writeAuditLog({ actorUserId: auth.uid, action: "REJECT_VISIT_VERIFICATION", resourceType: "visit",
++        resourceId: visitId, beforeSnapshot: { verificationStatus: visit.verificationStatus },
++        afterSnapshot: { verificationStatus: "needs_correction", version }, reason,
++        posyanduId: auth.posyanduId }, tx);
++    });
++  } catch (error) {
++    const code = error instanceof Error ? error.message : "";
++    if (code === "NOT_FOUND") return NextResponse.json({ error: "Kunjungan tidak ditemukan" }, { status: 404 });
++    if (code === "NOT_PENDING") return NextResponse.json({ error: "Hanya kunjungan menunggu verifikasi yang dapat ditolak" }, { status: 409 });
++    throw error;
++  }
+   return NextResponse.json({ success: true, visitId, status: "needs_correction" });
+ }
+diff --git a/src/lib/auth/server.ts b/src/lib/auth/server.ts
+index 5201ee9..8f3512f 100644
+--- a/src/lib/auth/server.ts
++++ b/src/lib/auth/server.ts
+@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
+ import { DecodedIdToken } from "firebase-admin/auth";
+ import { adminAuth, adminDb } from "@/lib/firebase/admin";
+ import { Role } from "@/types/verification";
++import { consumeRateLimit } from "@/lib/security/rate-limit";
+ 
+ export type AuthContext = {
+   uid: string; email?: string; role: Role; posyanduId: string;
+@@ -47,6 +48,16 @@ export async function requireAuth(req: NextRequest, allowedRoles?: Role[]): Prom
+     if (allowedRoles && !allowedRoles.includes(role)) return NextResponse.json({ error: "Akses ditolak untuk peran ini" }, { status: 403 });
+     const tenant = await adminDb.collection("posyandu").doc(posyanduId).get();
+     if (!tenant.exists || tenant.data()?.status !== "active") return NextResponse.json({ error: "Posyandu tidak aktif atau tidak ditemukan" }, { status: 403 });
++
++    // Central guard for every authenticated API mutation. Route-specific limits may
++    // remain stricter, but no write endpoint is left without a baseline throttle.
++    if (! ["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
++      const rate = await consumeRateLimit({ actorId: token.uid, action: "authenticated-api-write", limit: 120, windowMs: 60_000 });
++      if (!rate.allowed) {
++        return NextResponse.json({ error: "Terlalu banyak permintaan perubahan. Coba kembali beberapa saat lagi." },
++          { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } });
++      }
++    }
+     return { uid: token.uid, email: token.email, role, posyanduId, membershipId, token };
+   } catch {
+     return NextResponse.json({ error: "Token tidak valid atau sesi telah dicabut" }, { status: 401 });
+diff --git a/tests/security-hardening.test.ts b/tests/security-hardening.test.ts
+new file mode 100644
+index 0000000..4976bdc
+--- /dev/null
++++ b/tests/security-hardening.test.ts
+@@ -0,0 +1,36 @@
++import test from "node:test";
++import assert from "node:assert/strict";
++import { readFileSync } from "node:fs";
++
++const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
++
++test("all authenticated API writes pass through a centralized per-user rate limit", () => {
++  const auth = read("../src/lib/auth/server.ts");
++  assert.match(auth, /consumeRateLimit\(\{ actorId: token\.uid, action: "authenticated-api-write", limit: 120, windowMs: 60_000 \}\)/);
++  assert.match(auth, /status: 429/);
++  assert.match(auth, /Retry-After/);
++  assert.match(auth, /!\s*\["GET", "HEAD", "OPTIONS"\]\.includes\(req\.method\.toUpperCase\(\)\)/);
++});
++
++test("correction review updates its decision and audit record in one transaction", () => {
++  const route = read("../src/app/api/corrections/[requestId]/route.ts");
++  assert.match(route, /runTransaction\(async tx =>/);
++  assert.match(route, /tx\.get\(ref\)/);
++  assert.match(route, /tx\.update\(ref/);
++  assert.match(route, /posyanduId: auth\.posyanduId \}, tx\)/);
++});
++
++test("visit rejection updates visit, measurements and audit atomically", () => {
++  const route = read("../src/app/api/visits/[visitId]/reject/route.ts");
++  assert.match(route, /runTransaction\(async tx =>/);
++  assert.match(route, /tx\.get\(measurementQuery\)/);
++  assert.match(route, /tx\.update\(doc\.ref/);
++  assert.match(route, /posyanduId: auth\.posyanduId \}, tx\)/);
++});
++
++test("production preflight validates the exact encryption-key format used by AES-GCM", () => {
++  const preflight = read("../scripts/production-preflight.mjs");
++  const crypto = read("../src/lib/crypto/field-encryption.ts");
++  assert.match(preflight, /\^\[a-fA-F0-9\]\{64\}\$/);
++  assert.match(crypto, /\^\[a-fA-F0-9\]\{64\}\$/);
++});

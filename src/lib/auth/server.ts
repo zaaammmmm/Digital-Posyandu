@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { DecodedIdToken } from "firebase-admin/auth";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { Role } from "@/types/verification";
+import { consumeRateLimit } from "@/lib/security/rate-limit";
 
 export type AuthContext = {
   uid: string; email?: string; role: Role; posyanduId: string;
@@ -47,6 +48,16 @@ export async function requireAuth(req: NextRequest, allowedRoles?: Role[]): Prom
     if (allowedRoles && !allowedRoles.includes(role)) return NextResponse.json({ error: "Akses ditolak untuk peran ini" }, { status: 403 });
     const tenant = await adminDb.collection("posyandu").doc(posyanduId).get();
     if (!tenant.exists || tenant.data()?.status !== "active") return NextResponse.json({ error: "Posyandu tidak aktif atau tidak ditemukan" }, { status: 403 });
+
+    // Central guard for every authenticated API mutation. Route-specific limits may
+    // remain stricter, but no write endpoint is left without a baseline throttle.
+    if (! ["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
+      const rate = await consumeRateLimit({ actorId: token.uid, action: "authenticated-api-write", limit: 120, windowMs: 60_000 });
+      if (!rate.allowed) {
+        return NextResponse.json({ error: "Terlalu banyak permintaan perubahan. Coba kembali beberapa saat lagi." },
+          { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } });
+      }
+    }
     return { uid: token.uid, email: token.email, role, posyanduId, membershipId, token };
   } catch {
     return NextResponse.json({ error: "Token tidak valid atau sesi telah dicabut" }, { status: 401 });

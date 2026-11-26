@@ -15,8 +15,8 @@ if (process.env.NODE_ENV !== "production") problems.push("NODE_ENV harus product
 if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.startsWith("https://")) {
   problems.push("NEXT_PUBLIC_APP_URL harus menggunakan HTTPS.");
 }
-if (process.env.FIELD_ENCRYPTION_KEY && process.env.FIELD_ENCRYPTION_KEY.length < 32) {
-  problems.push("FIELD_ENCRYPTION_KEY tampak terlalu pendek; gunakan secret acak yang kuat.");
+if (process.env.FIELD_ENCRYPTION_KEY && !/^[a-fA-F0-9]{64}$/.test(process.env.FIELD_ENCRYPTION_KEY)) {
+  problems.push("FIELD_ENCRYPTION_KEY harus tepat 64 karakter hex (32 byte) sesuai implementasi AES-256-GCM.");
 }
 if (missing.length) problems.push(`Environment wajib belum tersedia: ${missing.join(", ")}`);
 
