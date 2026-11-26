@@ -149,7 +149,7 @@ Gunakan hanya data sintetis saat pengujian. Jangan menempatkan private key atau 
 
 ## Bootstrap Firebase dan seeder
 
-Seeder hanya membuat tenant, akun awal opsional, membership, dan metadata bootstrap. Seeder **tidak** membuat anak, wali, consent, kunjungan, antropometri, hasil pertumbuhan, imunisasi, atau suplemen sintetis. Collection klinis akan terbentuk ketika workflow aplikasi yang tervalidasi menyimpan dokumen pertama.
+Seeder bootstrap hanya membuat tenant, akun awal opsional, membership, dan metadata bootstrap. Seeder ini **tidak** membuat anak, wali, consent, kunjungan, antropometri, hasil pertumbuhan, imunisasi, atau suplemen sintetis. Collection klinis akan terbentuk ketika workflow aplikasi yang tervalidasi menyimpan dokumen pertama.
 
 Atur variabel berikut pada `.env.local` (atau environment shell):
 
@@ -186,6 +186,23 @@ Akun Firebase Authentication yang sudah ada akan digunakan kembali; password aku
 Jadwal imunisasi dapat diimpor melalui `SEED_IMMUNIZATION_RULES_FILE=path/ke-rules.json`; setiap item wajib memiliki `id`, `vaccineCode`, `ruleDescription`, `effectiveFrom`, `officialSource`, dan `sourceDocumentVersion`. Seeder selalu menyimpan status `draft`, `reviewedBy: null`, dan `approvedAt: null`. Jadwal tidak dapat dipakai sebagai jadwal produksi sebelum ditinjau dan disetujui tenaga berwenang.
 
 Materi knowledge base dapat diimpor melalui `SEED_KNOWLEDGE_DOCUMENTS_FILE=path/ke-documents.json`; setiap item wajib memiliki `id`, `title`, `text`, `sourceTitle`, dan `version`. Status selalu `pending_review`, bukan `approved`. Gunakan dokumen resmi dan metadata sumber yang dapat diverifikasi.
+
+### Data demo untuk uji tampilan per peran (opsional, hanya dev/staging)
+
+Seeder bootstrap di atas sengaja tidak membuat data pasien. Untuk melihat layar yang terisi saat login sebagai berbagai peran, gunakan seeder **terpisah** `seed:demo`. Seeder ini mengisi seluruh collection non-identitas dengan data **sintetis** (anak `DEMO-001` s.d. `DEMO-008`, kunjungan, antropometri, imunisasi, vitamin, skrining, consent, ringkasan, koreksi, administrasi, audit, materi edukasi, knowledge base, dan aturan imunisasi demo).
+
+```bash
+npm run seed:demo                       # dry run: menampilkan rencana & siapa melihat apa
+npm run seed:demo -- --apply            # menulis / menyinkronkan data demo
+npm run seed:demo -- --clean --apply    # menghapus seluruh data demo
+```
+
+- **Tidak membuat/mengubah** akun Auth, `users`, maupun `memberships`. Seeder hanya *membaca* membership aktif untuk menautkan data ke akun yang sudah ada (anak ditautkan ke akun `parent` melalui `guardianUids`; pencatat/verifikator memakai akun `cadre`/`health_worker`). Tenant diambil dari `SEED_POSYANDU_ID` atau `--posyandu=<id>`; otomatis dipilih bila hanya ada satu tenant.
+- Semua dokumen berid `demo-*` dan bertanda `seededBy: "digital-posyandu-demo-seed"`. Seeder hanya menimpa/menghapus dokumen bertanda itu dan berhenti bila sebuah ID sudah dipakai dokumen lain. Menjalankannya ulang aman (tanggal bersifat relatif terhadap hari ini).
+- Skenario yang tersedia: antrean verifikasi dan penanda kualitas, kunjungan dikembalikan (tindak lanjut kader), koreksi berversi (selesai dan menunggu verifikasi ulang), permintaan koreksi pada tiap status, imunisasi/vitamin `verified`/`pending_verification`/`rejected`, consent `granted`/`withdrawn`/`declined`, anak `active`/`archived`/`needs_verification`, serta audit trail yang selaras.
+- **Z-score tidak pernah dibuat.** `growth_assessments` mengikuti engine yang fail-closed (`zScore: null`). Nilai berat/tinggi adalah angka ilustratif, bukan acuan WHO.
+- Aturan imunisasi dan knowledge base demo diberi label `[DEMO]`, sumber "DATA DEMO — bukan jadwal resmi", dan **berstatus approved** agar jadwal serta panduan kader tampil. Gunakan `--draft-reference-only` bila ingin tetap `draft`/`pending_review`.
+- Seeder menolak berjalan saat `NODE_ENV=production` (kecuali `--allow-production`). **Jangan jalankan pada tenant yang berisi data anak nyata.**
 
 ### Rules, indexes, dan emulator
 

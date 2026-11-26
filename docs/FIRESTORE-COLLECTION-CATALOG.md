@@ -36,6 +36,7 @@ Dokumen ini memetakan Data Dictionary PRD (nama entitas tunggal/logis) ke nama c
 5. Jadwal imunisasi yang diimpor seeder selalu `draft`. PRD mensyaratkan sumber resmi, versi dokumen, masa berlaku, reviewer, dan persetujuan. Jangan mengaktifkan jadwal produksi tanpa verifikasi petugas berwenang.
 6. Pertumbuhan: jangan seed Z-score, klasifikasi, atau referensi WHO rekaan. Aktifkan penilaian hanya setelah referensi resmi berversi dan golden tests disetujui.
 7. Data pengguna dan anak harus diminimalkan. Jangan memakai NIK sebagai document ID/primary key; jangan seed nomor telepon, alamat rinci, atau data kesehatan personal.
+8. `npm run seed:demo` adalah seeder data sintetis **terpisah** untuk uji tampilan per peran (dev/staging). Ia tidak mengubah kontrak di atas: seluruh dokumen berid `demo-*` dengan `seededBy` penanda, tidak memuat Z-score, dan tidak boleh dijalankan pada tenant berisi data nyata. Lihat README bagian "Data demo".
 
 ## Collection yang dibuat oleh workflow, bukan seeder
 
