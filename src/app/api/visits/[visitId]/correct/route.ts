@@ -54,10 +54,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ visitI
       tx.update(request.ref, { status: "corrected", correctedBy: auth.uid, correctedAt: now });
     }
     tx.update(oldDoc.ref, { supersededAt: now, supersededBy: newRef.id });
-    tx.set(newRef, newData);
+    tx.create(newRef, newData);
     tx.update(visitRef, { verificationStatus: "pending_verification", version, updatedAt: now, correctionReason: body.reason.trim() });
+    await writeAuditLog({ actorUserId: auth.uid, action: "CORRECT_VISIT_DATA", resourceType: "visit",
+      resourceId: visitId, beforeSnapshot: oldData, afterSnapshot: newData, reason: body.reason.trim(),
+      posyanduId: auth.posyanduId }, tx);
   });
-  await writeAuditLog({ actorUserId: auth.uid, action: "CORRECT_VISIT_DATA", resourceType: "visit",
-    resourceId: visitId, beforeSnapshot: oldData, afterSnapshot: newData, reason: body.reason.trim(), posyanduId: auth.posyanduId });
   return NextResponse.json({ success: true, visitId, measurementVersion: version, status: "pending_verification" });
 }

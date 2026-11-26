@@ -89,7 +89,8 @@ test("knowledge submissions only accept http(s) source links, and guides show ap
 });
 
 test("guardian consent for AI summaries is enforced on generation and hidden when withdrawn", () => {
-  assert.match(read("../src/lib/data/consent.ts"), /consentStatus === "granted"/);
+  assert.match(read("../src/lib/data/consent.ts"), /return latest\?\.consentStatus === "granted"/);
+  assert.match(read("../src/lib/data/consent.ts"), /if \(!AI_SUMMARY_NOTICE_VERSION\) return false/);
   assert.match(read("../src/app/api/visits/[visitId]/verify/route.ts"), /isAiSummaryAllowed/);
   assert.match(read("../src/app/api/ai/summary/generate/route.ts"), /isAiSummaryAllowed/);
   assert.match(read("../src/app/(dashboard)/parent/children/[childId]/page.tsx"), /summary && summaryAllowed/);

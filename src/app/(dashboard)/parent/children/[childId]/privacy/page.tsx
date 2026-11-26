@@ -36,9 +36,15 @@ export default async function ChildPrivacyPage({ params }: { params: Promise<{ c
         <h3 className="font-semibold text-sm text-slate-900">Ringkasan otomatis (AI)</h3>
         <p className="text-sm text-slate-700">
           Setelah kunjungan disahkan petugas, aplikasi dapat membuat ringkasan singkat dari data terverifikasi.
-          Jika persetujuan dicabut, ringkasan baru tidak dibuat dan ringkasan yang sudah ada tidak ditampilkan.
-          Data pengukuran dan jadwal tetap tersedia.
+          Jika persetujuan dicabut, ringkasan baru tidak dibuat dan ringkasan AI yang sudah ada tidak ditampilkan.
+          Data pengukuran dan jadwal tetap tersedia. Persetujuan ini terpisah dari persetujuan layanan Posyandu lainnya.
         </p>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700 space-y-1">
+          <p><strong>Data yang diproses:</strong> umur dalam bulan, jenis kelamin untuk referensi pertumbuhan, tanggal kunjungan, hasil antropometri, perubahan dari kunjungan sebelumnya, layanan terverifikasi, pengingat dari katalog yang disahkan, dan cuplikan edukasi yang telah disetujui.</p>
+          <p><strong>Data yang tidak boleh dikirim:</strong> nama lengkap, kontak, NIK, dan alamat lengkap anak/wali.</p>
+          <p><strong>Pemrosesan eksternal:</strong> jika layanan Gemini dikonfigurasi, payload ringkasan dikirim ke penyedia tersebut. Detail retensi, dasar pemrosesan, dan pemberitahuan privasi final wajib ditetapkan oleh pengelola sebelum versi persetujuan diaktifkan.</p>
+          <p><strong>Versi pemberitahuan:</strong> {AI_SUMMARY_NOTICE_VERSION || "Belum dikonfigurasi"}</p>
+        </div>
         <p className="text-xs text-slate-500">Status saat ini: <strong>{allowed ? "Diizinkan" : "Tidak diizinkan"}</strong></p>
         <ConsentControl childId={childId} purpose={AI_SUMMARY_PURPOSE} noticeVersion={AI_SUMMARY_NOTICE_VERSION} allowed={allowed} />
       </section>

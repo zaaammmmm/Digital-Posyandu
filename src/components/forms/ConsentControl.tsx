@@ -32,10 +32,11 @@ export const ConsentControl: React.FC<Props> = ({ childId, purpose, noticeVersio
 
   return (
     <div className="space-y-2">
+      {!noticeVersion && <p role="status" className="text-xs text-amber-800">Persetujuan belum dapat diberikan karena versi pemberitahuan privasi belum dikonfigurasi dan disetujui.</p>}
       {error && <p role="alert" className="text-xs font-medium text-rose-800">{error}</p>}
       {allowed
-        ? <Button type="button" variant="outline" disabled={loading} onClick={() => send("withdrawn")}>Cabut persetujuan</Button>
-        : <Button type="button" disabled={loading} onClick={() => send("granted")}>Berikan persetujuan</Button>}
+        ? <Button type="button" variant="outline" disabled={loading || !noticeVersion} onClick={() => send("withdrawn")}>Cabut persetujuan</Button>
+        : <Button type="button" disabled={loading || !noticeVersion} onClick={() => send("granted")}>Berikan persetujuan</Button>}
     </div>
   );
 };
