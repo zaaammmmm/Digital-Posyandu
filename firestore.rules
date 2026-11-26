@@ -2,57 +2,75 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+    function membershipPath(posyanduId) {
+      return /databases/$(database)/documents/memberships/$(request.auth.uid + "_" + posyanduId);
+    }
     function memberOf(posyanduId) {
-      return signedIn() &&
-        exists(/databases/$(database)/documents/memberships/$(request.auth.uid + "_" + posyanduId));
+      return signedIn() && exists(membershipPath(posyanduId));
     }
-    function membership(posyanduId) {
-      return get(/databases/$(database)/documents/memberships/$(request.auth.uid + "_" + posyanduId)).data;
-    }
+    function membership(posyanduId) { return get(membershipPath(posyanduId)).data; }
     function activeMember(posyanduId) {
       return memberOf(posyanduId) && membership(posyanduId).status == 'active';
     }
     function roleIn(posyanduId, roles) {
       return activeMember(posyanduId) && membership(posyanduId).role in roles;
     }
-    function sameTenant(resourceData) {
-      return signedIn() && resourceData.posyanduId is string &&
-        activeMember(resourceData.posyanduId);
+    function sameTenant(data) {
+      return signedIn() && data.posyanduId is string && activeMember(data.posyanduId);
     }
-    function staffRoles() {
-      return ['cadre', 'health_worker', 'posyandu_admin', 'system_admin'];
+    function staffRoles() { return ['cadre', 'health_worker', 'posyandu_admin', 'system_admin']; }
+    function parentOfChild(childId, posyanduId) {
+      return signedIn() && exists(/databases/$(database)/documents/children/$(childId)) &&
+        get(/databases/$(database)/documents/children/$(childId)).data.posyanduId == posyanduId &&
+        get(/databases/$(database)/documents/children/$(childId)).data.guardianUids is list &&
+        request.auth.uid in get(/databases/$(database)/documents/children/$(childId)).data.guardianUids;
     }
+
+    // Identity and tenant administration: all writes go through authenticated server APIs.
     match /memberships/{membershipId} {
       allow read: if signedIn() &&
         (resource.data.userId == request.auth.uid ||
          roleIn(resource.data.posyanduId, ['posyandu_admin', 'system_admin']));
       allow write: if false;
     }
-    match /posyandus/{posyanduId} {
-      allow read: if activeMember(posyanduId);
-      allow write: if roleIn(posyanduId, ['posyandu_admin', 'system_admin']);
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
     }
+    match /posyandu/{posyanduId} {
+      allow read: if activeMember(posyanduId);
+      allow write: if false;
+    }
+
+    // Child and guardian records. No direct client writes to personal/health data.
     match /children/{childId} {
       allow read: if sameTenant(resource.data) &&
         (roleIn(resource.data.posyanduId, staffRoles()) ||
          (roleIn(resource.data.posyanduId, ['parent']) &&
-          resource.data.guardianUids is list &&
-          request.auth.uid in resource.data.guardianUids));
-      allow create: if request.resource.data.posyanduId is string &&
-        roleIn(request.resource.data.posyanduId, ['cadre', 'posyandu_admin']);
-      allow update: if sameTenant(resource.data) &&
-        roleIn(resource.data.posyanduId, ['cadre', 'posyandu_admin']) &&
-        request.resource.data.posyanduId == resource.data.posyanduId;
-      allow delete: if false;
+          resource.data.guardianUids is list && request.auth.uid in resource.data.guardianUids));
+      allow write: if false;
     }
+    match /guardians/{guardianId} {
+      allow read: if sameTenant(resource.data) &&
+        (roleIn(resource.data.posyanduId, staffRoles()) || resource.data.userId == request.auth.uid);
+      allow write: if false;
+    }
+    match /child_guardians/{linkId} {
+      allow read: if sameTenant(resource.data) &&
+        (roleIn(resource.data.posyanduId, staffRoles()) || resource.data.guardianUid == request.auth.uid);
+      allow write: if false;
+    }
+    match /consent_records/{consentId} {
+      allow read: if sameTenant(resource.data) &&
+        (roleIn(resource.data.posyanduId, staffRoles()) || resource.data.guardianUid == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Clinical records are immutable from client SDK; server routes enforce workflow and audit.
     match /visits/{visitId} {
       allow read: if sameTenant(resource.data) &&
-        (roleIn(resource.data.posyanduId, staffRoles()) ||
-         roleIn(resource.data.posyanduId, ['parent']) &&
-         resource.data.guardianUid == request.auth.uid);
-      allow create: if request.resource.data.posyanduId is string &&
-        roleIn(request.resource.data.posyanduId, ['cadre', 'health_worker']);
-      allow update, delete: if false;
+        (roleIn(resource.data.posyanduId, staffRoles()) || resource.data.guardianUid == request.auth.uid);
+      allow write: if false;
     }
     match /anthropometry_measurements/{measurementId} {
       allow read: if signedIn() &&
@@ -60,39 +78,67 @@ service cloud.firestore {
         sameTenant(get(/databases/$(database)/documents/visits/$(resource.data.visitId)).data) &&
         (roleIn(get(/databases/$(database)/documents/visits/$(resource.data.visitId)).data.posyanduId, staffRoles()) ||
          get(/databases/$(database)/documents/visits/$(resource.data.visitId)).data.guardianUid == request.auth.uid);
-      allow create, update, delete: if false;
-    }
-    match /growth_assessments/{id} {
-      allow read: if signedIn() && resource.data.posyanduId is string &&
-        activeMember(resource.data.posyanduId) &&
-        (roleIn(resource.data.posyanduId, staffRoles()) || resource.data.guardianUid == request.auth.uid);
       allow write: if false;
     }
-    match /ai_summaries/{id} {
-      allow read: if signedIn() && resource.data.posyanduId is string &&
-        activeMember(resource.data.posyanduId) &&
-        (roleIn(resource.data.posyanduId, staffRoles()) || resource.data.guardianUid == request.auth.uid);
-      allow write: if false;
-    }
-    match /audit_logs/{id} {
-      allow read: if signedIn() && resource.data.posyanduId is string &&
-        roleIn(resource.data.posyanduId, ['posyandu_admin', 'health_worker', 'system_admin']);
-      allow write: if false;
-    }
-    match /administrative_records/{id} {
+    match /growth_assessments/{assessmentId} {
       allow read: if sameTenant(resource.data) &&
-        roleIn(resource.data.posyanduId, staffRoles());
-      allow create: if request.resource.data.posyanduId is string &&
-        roleIn(request.resource.data.posyanduId, ['cadre', 'posyandu_admin']);
-      allow update: if sameTenant(resource.data) &&
-        roleIn(resource.data.posyanduId, ['cadre', 'posyandu_admin']) &&
-        request.resource.data.posyanduId == resource.data.posyanduId;
-      allow delete: if false;
+        (roleIn(resource.data.posyanduId, staffRoles()) || resource.data.guardianUid == request.auth.uid);
+      allow write: if false;
     }
-    match /education_content/{id} {
+    match /immunization_events/{eventId} {
+      allow read: if sameTenant(resource.data) &&
+        (roleIn(resource.data.posyanduId, staffRoles()) || parentOfChild(resource.data.childId, resource.data.posyanduId));
+      allow write: if false;
+    }
+    match /supplement_events/{eventId} {
+      allow read: if sameTenant(resource.data) &&
+        (roleIn(resource.data.posyanduId, staffRoles()) || parentOfChild(resource.data.childId, resource.data.posyanduId));
+      allow write: if false;
+    }
+    match /development_screenings/{screeningId} {
+      allow read: if sameTenant(resource.data) &&
+        (roleIn(resource.data.posyanduId, staffRoles()) || parentOfChild(resource.data.childId, resource.data.posyanduId));
+      allow write: if false;
+    }
+    match /ai_summaries/{summaryId} {
+      allow read: if sameTenant(resource.data) &&
+        (roleIn(resource.data.posyanduId, staffRoles()) || resource.data.guardianUid == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Reference and education content: only reviewed/published material is readable.
+    match /immunization_schedule_rules/{ruleId} {
+      allow read: if signedIn() && resource.data.status == 'approved';
+      allow write: if false;
+    }
+    match /education_content/{contentId} {
       allow read: if signedIn() && resource.data.status == 'published';
       allow write: if false;
     }
+    match /knowledge_documents/{documentId} {
+      allow read: if signedIn() && resource.data.status == 'approved';
+      allow write: if false;
+    }
+
+    // Operational and correction records.
+    match /administrative_records/{recordId} {
+      allow read: if sameTenant(resource.data) && roleIn(resource.data.posyanduId, staffRoles());
+      allow write: if false;
+    }
+    match /correction_requests/{requestId} {
+      allow read: if sameTenant(resource.data) &&
+        (roleIn(resource.data.posyanduId, ['health_worker', 'posyandu_admin', 'system_admin']) ||
+         resource.data.requestedBy == request.auth.uid);
+      allow write: if false;
+    }
+    match /audit_logs/{logId} {
+      allow read: if sameTenant(resource.data) &&
+        roleIn(resource.data.posyanduId, ['posyandu_admin', 'health_worker', 'system_admin']);
+      allow write: if false;
+    }
+
+    // Internal metadata is never client-readable or writable.
+    match /_system/{documentId} { allow read, write: if false; }
     match /{document=**} { allow read, write: if false; }
   }
 }

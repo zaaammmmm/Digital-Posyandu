@@ -147,6 +147,64 @@ Contoh isi dokumen:
 
 Gunakan hanya data sintetis saat pengujian. Jangan menempatkan private key atau kunci enkripsi pada kode sumber maupun variabel `NEXT_PUBLIC_*`.
 
+## Bootstrap Firebase dan seeder
+
+Seeder hanya membuat tenant, akun awal opsional, membership, dan metadata bootstrap. Seeder **tidak** membuat anak, wali, consent, kunjungan, antropometri, hasil pertumbuhan, imunisasi, atau suplemen sintetis. Collection klinis akan terbentuk ketika workflow aplikasi yang tervalidasi menyimpan dokumen pertama.
+
+Atur variabel berikut pada `.env.local` (atau environment shell):
+
+```dotenv
+FIREBASE_ADMIN_PROJECT_ID=project-id-anda
+# Gunakan service account melalui FIREBASE_ADMIN_CLIENT_EMAIL + FIREBASE_ADMIN_PRIVATE_KEY,
+# atau GOOGLE_APPLICATION_CREDENTIALS yang menunjuk file service account di server.
+SEED_POSYANDU_ID=posyandu-kode-internal
+SEED_POSYANDU_NAME=Nama Posyandu
+SEED_POSYANDU_VILLAGE=Desa
+SEED_POSYANDU_DISTRICT=Kecamatan
+SEED_POSYANDU_REGENCY=Kabupaten
+SEED_POSYANDU_PROVINCE=Provinsi
+SEED_ADMIN_EMAIL=admin@example.org
+SEED_ADMIN_PASSWORD=GANTI_DENGAN_PASSWORD_MINIMAL_12_KARAKTER
+SEED_ADMIN_NAME=Administrator Posyandu
+# Opsional: akun reviewer konten
+SEED_REVIEWER_EMAIL=reviewer@example.org
+SEED_REVIEWER_PASSWORD=GANTI_DENGAN_PASSWORD_MINIMAL_12_KARAKTER
+SEED_REVIEWER_NAME=Reviewer Konten
+```
+
+Jalankan dari root proyek:
+
+```bash
+npm run seed:firestore                 # dry-run, tidak menulis data
+npm run seed:firestore -- --apply      # menerapkan seed secara idempotent
+```
+
+Akun Firebase Authentication yang sudah ada akan digunakan kembali; password akun yang sudah ada tidak diubah. Membership yang sudah ada tidak ditimpa. Seeder tidak pernah mengaktifkan ulang membership nonaktif atau mengubah role yang sudah berbeda. Simpan kredensial hanya pada secret manager/server, jangan commit `.env.local`.
+
+### Referensi klinis dan materi edukasi
+
+Jadwal imunisasi dapat diimpor melalui `SEED_IMMUNIZATION_RULES_FILE=path/ke-rules.json`; setiap item wajib memiliki `id`, `vaccineCode`, `ruleDescription`, `effectiveFrom`, `officialSource`, dan `sourceDocumentVersion`. Seeder selalu menyimpan status `draft`, `reviewedBy: null`, dan `approvedAt: null`. Jadwal tidak dapat dipakai sebagai jadwal produksi sebelum ditinjau dan disetujui tenaga berwenang.
+
+Materi knowledge base dapat diimpor melalui `SEED_KNOWLEDGE_DOCUMENTS_FILE=path/ke-documents.json`; setiap item wajib memiliki `id`, `title`, `text`, `sourceTitle`, dan `version`. Status selalu `pending_review`, bukan `approved`. Gunakan dokumen resmi dan metadata sumber yang dapat diverifikasi.
+
+### Rules, indexes, dan emulator
+
+`firebase.json` mengikat `firestore.rules` dan `firestore.indexes.json`. Deploy konfigurasi dengan:
+
+```bash
+npm run firebase:deploy
+```
+
+Uji Rules terlebih dahulu menggunakan Firebase Emulator:
+
+```bash
+npm run emulators
+```
+
+Rules menolak seluruh direct client writes pada data operasional/klinis; mutasi harus melalui API server yang memverifikasi ID token, membership, tenant, role, dan audit. Catatan: Admin SDK melewati Firestore Rules, sehingga pemeriksaan otorisasi pada setiap API route tetap wajib. Indexes mengikuti query yang ditemukan pada repository dan dapat meminta index tambahan jika query baru ditambahkan.
+
+Detail mapping entitas PRD ke collection, field minimum, dan batasan seed tersedia pada [`docs/FIRESTORE-COLLECTION-CATALOG.md`](docs/FIRESTORE-COLLECTION-CATALOG.md).
+
 ## Keamanan dan privasi
 
 - API server memverifikasi identitas dan membatasi akses berdasarkan tenant serta role.
