@@ -675,14 +675,14 @@ function buildDemoDataset(opts) {
     ['Campak-Rubella lanjutan', '[DEMO] Campak-Rubella lanjutan', 18],
   ];
   rules.forEach(([code, name, target], i) => {
-    const approved = approveReference;
+    // Demo rules are never approved: illustrative schedules must not appear as
+    // official clinical reminders, even when demo knowledge content is approved.
     add('immunization_schedule_rules', `demo-rule-${pad(i + 1)}`, {
       vaccineCode: code, name, targetAgeMonths: target, targetAgeOrCondition: `${target} bulan`,
       ruleDescription: `Aturan contoh untuk demo aplikasi: sasaran usia ${target} bulan.`, version: 'demo-1',
       effectiveFrom: addDays(today, -365), effectiveUntil: null,
       officialSource: 'DATA DEMO — bukan jadwal resmi', sourceDocumentVersion: 'demo-1',
-      status: approved ? 'approved' : 'draft', reviewedBy: approved ? reviewerUid : null,
-      approvedBy: approved ? reviewerUid : null, approvedAt: approved ? reviewedAt : null,
+      status: 'draft', reviewedBy: null, approvedBy: null, approvedAt: null,
       createdAt: stamp(addDays(today, -70), '03:00'), updatedAt: reviewedAt,
     });
   });

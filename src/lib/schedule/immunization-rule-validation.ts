@@ -1,0 +1,58 @@
+import type { ApprovedScheduleRule } from "./approved-catalog";
+
+export type ImmunizationRuleDraftInput = Omit<ApprovedScheduleRule,
+  "id" | "status" | "approvedBy" | "approvedAt">;
+
+export function validateImmunizationRuleDraft(value: unknown): {
+  valid: boolean;
+  errors: string[];
+  data?: ImmunizationRuleDraftInput;
+} {
+  if (!value || typeof value !== "object") return { valid: false, errors: ["BODY_INVALID"] };
+  const input = value as Record<string, unknown>;
+  const errors: string[] = [];
+  const required = ["vaccineCode", "name", "version", "effectiveFrom", "officialSource", "sourceDocumentVersion"];
+  for (const key of required) {
+    if (typeof input[key] !== "string" || !input[key].trim()) errors.push(`${key.toUpperCase()}_REQUIRED`);
+  }
+  if (typeof input.targetAgeMonths !== "number" || !Number.isInteger(input.targetAgeMonths)
+    || input.targetAgeMonths < 0 || input.targetAgeMonths > 240) errors.push("TARGET_AGE_INVALID");
+  if (typeof input.vaccineCode === "string" && !/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(input.vaccineCode.trim())) errors.push("VACCINE_CODE_INVALID");
+  if (typeof input.effectiveFrom === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(input.effectiveFrom)) errors.push("EFFECTIVE_DATE_INVALID");
+  if (typeof input.effectiveFrom === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.effectiveFrom)) {
+    const parsed = new Date(`${input.effectiveFrom}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== input.effectiveFrom) errors.push("EFFECTIVE_DATE_INVALID");
+  }
+  if (typeof input.officialSource === "string") {
+    try {
+      const url = new URL(input.officialSource);
+      if (url.protocol !== "https:") errors.push("OFFICIAL_SOURCE_MUST_USE_HTTPS");
+    } catch { errors.push("OFFICIAL_SOURCE_URL_INVALID"); }
+  }
+  if (errors.length) return { valid: false, errors };
+  return {
+    valid: true,
+    errors,
+    data: {
+      vaccineCode: (input.vaccineCode as string).trim(),
+      name: (input.name as string).trim(),
+      targetAgeMonths: input.targetAgeMonths as number,
+      version: (input.version as string).trim(),
+      effectiveFrom: (input.effectiveFrom as string).trim(),
+      officialSource: (input.officialSource as string).trim(),
+      sourceDocumentVersion: (input.sourceDocumentVersion as string).trim(),
+    },
+  };
+}
+
+export function canApproveImmunizationRule(rule: Record<string, unknown>): boolean {
+  return rule.status === "draft"
+    && typeof rule.vaccineCode === "string" && !!rule.vaccineCode.trim()
+    && typeof rule.name === "string" && !!rule.name.trim()
+    && typeof rule.version === "string" && !!rule.version.trim()
+    && typeof rule.effectiveFrom === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rule.effectiveFrom)
+    && typeof rule.officialSource === "string" && rule.officialSource.startsWith("https://")
+    && typeof rule.sourceDocumentVersion === "string" && !!rule.sourceDocumentVersion.trim()
+    && typeof rule.targetAgeMonths === "number" && Number.isInteger(rule.targetAgeMonths)
+    && rule.targetAgeMonths >= 0 && rule.targetAgeMonths <= 240;
+}

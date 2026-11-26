@@ -186,7 +186,8 @@ test("each role has something to look at (queues and states are populated)", () 
   for (const status of ["granted", "withdrawn", "declined"]) assert.ok(count("consent_records", r => r.consentStatus === status) >= 1, `consent ${status}`);
   for (const status of ["approved", "pending_review"]) assert.ok(count("knowledge_documents", d => d.status === status) >= 1, `knowledge ${status}`);
   for (const status of ["published", "draft", "deprecated"]) assert.ok(count("education_content", d => d.status === status) >= 1, `education ${status}`);
-  for (const status of ["approved", "draft", "retired"]) assert.ok(count("immunization_schedule_rules", d => d.status === status) >= 1, `rule ${status}`);
+  for (const status of ["draft", "retired"]) assert.ok(count("immunization_schedule_rules", d => d.status === status) >= 1, `rule ${status}`);
+  assert.equal(count("immunization_schedule_rules", d => d.status === "approved"), 0, "demo immunization rules must never be approved");
   for (const status of ["active", "archived", "needs_verification"]) assert.ok(count("children", c => c.recordStatus === status) >= 1, `child ${status}`);
   const actions = new Set(docs(ds, "audit_logs").map(d => d.data.action));
   for (const a of ["VERIFY_VISIT", "REJECT_VISIT_VERIFICATION", "CORRECT_VISIT_DATA", "VERIFY_SERVICE_EVENT", "REJECT_SERVICE_EVENT",
@@ -196,17 +197,16 @@ test("each role has something to look at (queues and states are populated)", () 
   assert.deepEqual(logs.map(l => l.timestamp), [...logs.map(l => l.timestamp)].sort());
 });
 
-test("approved reference data is usable by the app; --draft-reference-only keeps it unapproved", () => {
+test("demo immunization rules remain unapproved and never appear as clinical reminders", () => {
   const ds = build(2);
   const rules = docs(ds, "immunization_schedule_rules").map(d => ({ id: d.id, ...d.data }) as unknown as ApprovedScheduleRule);
-  const usable = rules.filter(isScheduleRuleUsable);
-  assert.ok(usable.length >= 5);
-  assert.ok(usable.every(r => r.officialSource.includes("DEMO") && r.name.startsWith("[DEMO]")));
+  assert.equal(rules.filter(r => r.status === "approved").length, 0);
+  assert.equal(rules.filter(isScheduleRuleUsable).length, 0);
   const children = docs(ds, "children").map((d): Record<string, any> => ({ id: d.id, ...d.data }));
   const infant = children.find(c => c.registrationNumber === "DEMO-001")!;
   const age = calculateAgeMonths(infant.dateOfBirth, ds.today);
   const recorded = docs(ds, "immunization_events").filter(d => d.data.childId === infant.id && d.data.verificationStatus === "verified").map(d => d.data.vaccineCode);
-  assert.ok(getApprovedUpcomingRules(rules, age, recorded).length >= 1, "parent of the youngest child sees upcoming demo rules");
+  assert.equal(getApprovedUpcomingRules(rules, age, recorded).length, 0, "demo rules must not appear as upcoming immunizations");
   for (const d of docs(ds, "knowledge_documents").filter(d => d.data.status === "approved")) {
     assert.ok(d.data.sourceTitle && d.data.reviewedAt && d.data.reviewedBy, "approved docs are retrievable by the AI retriever");
   }

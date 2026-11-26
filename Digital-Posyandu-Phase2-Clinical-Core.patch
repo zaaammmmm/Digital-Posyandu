@@ -1,0 +1,454 @@
+diff --git a/docs/PHASE-2-CLINICAL-CORE.md b/docs/PHASE-2-CLINICAL-CORE.md
+new file mode 100644
+index 0000000..d132074
+--- /dev/null
++++ b/docs/PHASE-2-CLINICAL-CORE.md
+@@ -0,0 +1,29 @@
++# Phase 2 — Clinical Core Governance
++
++## Implemented in this patch
++
++- Generic LMS Z-score mathematical primitive with finite/positive input guards.
++- Structural LMS row validation for indicator, sex, coordinate, L/M/S values, and duplicate coordinates.
++- Reviewer-only API to create and update immunization rule drafts and approve complete drafts.
++- Approved immunization rules are not editable through the draft endpoint; create a new version instead.
++- Rule create/update/approval and audit entries are committed in the same Firestore transaction.
++- Reviewer page can create drafts and approve them after checking the cited source document.
++
++## Clinical safety boundary
++
++This patch does **not** include WHO reference LMS tables, clinical cut-offs, or a national immunization schedule. The LMS helper is mathematical infrastructure only. It is not wired into the growth assessment workflow and must not be used to generate a child's clinical result until all of the following are completed:
++
++1. Obtain the exact official reference dataset and applicable technical documentation from an authoritative source.
++2. Verify licensing/terms, source version, checksum, sex/indicator coverage, measurement dimensions, and effective dates.
++3. Have an authorized clinician review the dataset and independently approved golden test cases.
++4. Add interpolation/edge handling rules required by that exact dataset and compare results against independently calculated references.
++5. Connect the approved dataset to the growth engine while preserving `null`/fail-closed behavior if any check fails.
++
++Immunization rules are entered from the official source by a content reviewer. Approval records reviewer identity and timestamp. This workflow does not independently establish that the source is clinically authoritative; that remains a governance responsibility.
++
++## Not included yet
++
++- No WHO dataset is bundled or activated.
++- No invented immunization schedule or dose sequence is included.
++- No developmental screening questions, scoring thresholds, or instruments are invented. Select and approve the exact official instrument and its permitted use before implementing its operational form.
++- No clinical classifications are inferred from the generic LMS formula.
+diff --git a/scripts/demo-data/dataset.cjs b/scripts/demo-data/dataset.cjs
+index 50c3b20..43331e1 100644
+--- a/scripts/demo-data/dataset.cjs
++++ b/scripts/demo-data/dataset.cjs
+@@ -675,14 +675,14 @@ function buildDemoDataset(opts) {
+     ['Campak-Rubella lanjutan', '[DEMO] Campak-Rubella lanjutan', 18],
+   ];
+   rules.forEach(([code, name, target], i) => {
+-    const approved = approveReference;
++    // Demo rules are never approved: illustrative schedules must not appear as
++    // official clinical reminders, even when demo knowledge content is approved.
+     add('immunization_schedule_rules', `demo-rule-${pad(i + 1)}`, {
+       vaccineCode: code, name, targetAgeMonths: target, targetAgeOrCondition: `${target} bulan`,
+       ruleDescription: `Aturan contoh untuk demo aplikasi: sasaran usia ${target} bulan.`, version: 'demo-1',
+       effectiveFrom: addDays(today, -365), effectiveUntil: null,
+       officialSource: 'DATA DEMO — bukan jadwal resmi', sourceDocumentVersion: 'demo-1',
+-      status: approved ? 'approved' : 'draft', reviewedBy: approved ? reviewerUid : null,
+-      approvedBy: approved ? reviewerUid : null, approvedAt: approved ? reviewedAt : null,
++      status: 'draft', reviewedBy: null, approvedBy: null, approvedAt: null,
+       createdAt: stamp(addDays(today, -70), '03:00'), updatedAt: reviewedAt,
+     });
+   });
+diff --git a/src/app/(dashboard)/reviewer/page.tsx b/src/app/(dashboard)/reviewer/page.tsx
+index 7ce91d8..5dddbe8 100644
+--- a/src/app/(dashboard)/reviewer/page.tsx
++++ b/src/app/(dashboard)/reviewer/page.tsx
+@@ -5,6 +5,7 @@ import type { Row } from "@/lib/data/rows";
+ import { KnowledgeCreateForm } from "@/components/forms/KnowledgeCreateForm";
+ import { KnowledgeReviewActions } from "@/components/forms/KnowledgeReviewActions";
+ import { isScheduleRuleUsable, ApprovedScheduleRule } from "@/lib/schedule/approved-catalog";
++import { ImmunizationRuleManager } from "@/components/forms/ImmunizationRuleManager";
+ 
+ export default async function ContentReviewerPage() {
+   await requirePageContext(["content_reviewer", "system_admin"]);
+@@ -14,6 +15,7 @@ export default async function ContentReviewerPage() {
+   ]);
+   const rules = rulesSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, unknown>) }) as unknown as ApprovedScheduleRule);
+   const usable = rules.filter(isScheduleRuleUsable);
++  const drafts = rules.filter(rule => rule.status === "draft");
+   const knowledgeApproved = knowledgeSnap.docs.filter(d => d.data().status === "approved").length;
+   const pending = knowledgeSnap.docs
+     .filter(d => d.data().status === "pending_review")
+@@ -47,6 +49,7 @@ export default async function ContentReviewerPage() {
+           {knowledgeApproved} dokumen berstatus approved dari {knowledgeSnap.size} dokumen tersimpan.
+         </p>
+       </div>
++      <ImmunizationRuleManager drafts={drafts} />
+       <KnowledgeCreateForm />
+       <div className="posyandu-card p-5 sm:p-6 space-y-4">
+         <h4 className="font-semibold text-sm sm:text-base text-slate-900">Menunggu Peninjauan ({pending.length})</h4>
+diff --git a/src/app/api/immunization-rules/[ruleId]/approve/route.ts b/src/app/api/immunization-rules/[ruleId]/approve/route.ts
+new file mode 100644
+index 0000000..c603f08
+--- /dev/null
++++ b/src/app/api/immunization-rules/[ruleId]/approve/route.ts
+@@ -0,0 +1,27 @@
++import { NextRequest, NextResponse } from "next/server";
++import { adminDb } from "@/lib/firebase/admin";
++import { requireAuth, isAuthError } from "@/lib/auth/server";
++import { writeAuditLog } from "@/lib/audit/audit-logger";
++import { canApproveImmunizationRule } from "@/lib/schedule/immunization-rule-validation";
++
++export async function POST(req: NextRequest, context: { params: Promise<{ ruleId: string }> }) {
++  const auth = await requireAuth(req, ["content_reviewer"]);
++  if (isAuthError(auth)) return auth;
++  const { ruleId } = await context.params;
++  const ref = adminDb.collection("immunization_schedule_rules").doc(ruleId);
++  const now = new Date().toISOString();
++  const outcome = await adminDb.runTransaction(async transaction => {
++    const snap = await transaction.get(ref);
++    if (!snap.exists) return "NOT_FOUND";
++    const before = snap.data()!;
++    if (!canApproveImmunizationRule(before)) return before.status === "draft" ? "INCOMPLETE" : "NOT_DRAFT";
++    const after = { ...before, status: "approved", approvedBy: auth.uid, approvedAt: now, updatedAt: now };
++    transaction.update(ref, { status: "approved", approvedBy: auth.uid, approvedAt: now, updatedAt: now });
++    await writeAuditLog({ actorUserId: auth.uid, action: "IMMUNIZATION_RULE_APPROVED", resourceType: "immunization_schedule_rule", resourceId: ruleId, beforeSnapshot: before, afterSnapshot: after, reason: "Mengesahkan aturan imunisasi dengan metadata sumber dan versi", posyanduId: auth.posyanduId }, transaction);
++    return "OK";
++  });
++  if (outcome === "NOT_FOUND") return NextResponse.json({ error: "Aturan tidak ditemukan" }, { status: 404 });
++  if (outcome === "NOT_DRAFT") return NextResponse.json({ error: "Hanya draft yang dapat disahkan" }, { status: 409 });
++  if (outcome === "INCOMPLETE") return NextResponse.json({ error: "Metadata aturan belum lengkap atau sumber bukan HTTPS" }, { status: 422 });
++  return NextResponse.json({ success: true, status: "approved" });
++}
+diff --git a/src/app/api/immunization-rules/[ruleId]/route.ts b/src/app/api/immunization-rules/[ruleId]/route.ts
+new file mode 100644
+index 0000000..7dcd080
+--- /dev/null
++++ b/src/app/api/immunization-rules/[ruleId]/route.ts
+@@ -0,0 +1,30 @@
++import { NextRequest, NextResponse } from "next/server";
++import { adminDb } from "@/lib/firebase/admin";
++import { requireAuth, isAuthError } from "@/lib/auth/server";
++import { writeAuditLog } from "@/lib/audit/audit-logger";
++import { validateImmunizationRuleDraft } from "@/lib/schedule/immunization-rule-validation";
++
++export async function PATCH(req: NextRequest, context: { params: Promise<{ ruleId: string }> }) {
++  const auth = await requireAuth(req, ["content_reviewer"]);
++  if (isAuthError(auth)) return auth;
++  const { ruleId } = await context.params;
++  let body: unknown;
++  try { body = await req.json(); } catch { return NextResponse.json({ error: "Body JSON tidak valid" }, { status: 400 }); }
++  const validation = validateImmunizationRuleDraft(body);
++  if (!validation.valid || !validation.data) return NextResponse.json({ error: "Data aturan imunisasi tidak valid", details: validation.errors }, { status: 400 });
++  const ref = adminDb.collection("immunization_schedule_rules").doc(ruleId);
++  const now = new Date().toISOString();
++  const outcome = await adminDb.runTransaction(async transaction => {
++    const snap = await transaction.get(ref);
++    if (!snap.exists) return "NOT_FOUND";
++    const before = snap.data()!;
++    if (before.status !== "draft") return "NOT_DRAFT";
++    const after = { ...validation.data, status: "draft", approvedBy: null, approvedAt: null, updatedBy: auth.uid, updatedAt: now };
++    transaction.update(ref, after);
++    await writeAuditLog({ actorUserId: auth.uid, action: "IMMUNIZATION_RULE_DRAFT_UPDATED", resourceType: "immunization_schedule_rule", resourceId: ruleId, beforeSnapshot: before, afterSnapshot: after, reason: "Memperbarui draft aturan imunisasi", posyanduId: auth.posyanduId }, transaction);
++    return "OK";
++  });
++  if (outcome === "NOT_FOUND") return NextResponse.json({ error: "Aturan tidak ditemukan" }, { status: 404 });
++  if (outcome === "NOT_DRAFT") return NextResponse.json({ error: "Aturan yang sudah diproses tidak dapat diubah; buat versi baru" }, { status: 409 });
++  return NextResponse.json({ success: true, status: "draft" });
++}
+diff --git a/src/app/api/immunization-rules/route.ts b/src/app/api/immunization-rules/route.ts
+new file mode 100644
+index 0000000..8550427
+--- /dev/null
++++ b/src/app/api/immunization-rules/route.ts
+@@ -0,0 +1,24 @@
++import { NextRequest, NextResponse } from "next/server";
++import { adminDb } from "@/lib/firebase/admin";
++import { requireAuth, isAuthError } from "@/lib/auth/server";
++import { writeAuditLog } from "@/lib/audit/audit-logger";
++import { validateImmunizationRuleDraft } from "@/lib/schedule/immunization-rule-validation";
++
++export async function POST(req: NextRequest) {
++  const auth = await requireAuth(req, ["content_reviewer"]);
++  if (isAuthError(auth)) return auth;
++  let body: unknown;
++  try { body = await req.json(); } catch { return NextResponse.json({ error: "Body JSON tidak valid" }, { status: 400 }); }
++  const validation = validateImmunizationRuleDraft(body);
++  if (!validation.valid || !validation.data) {
++    return NextResponse.json({ error: "Data aturan imunisasi tidak valid", details: validation.errors }, { status: 400 });
++  }
++  const ref = adminDb.collection("immunization_schedule_rules").doc();
++  const now = new Date().toISOString();
++  const draft = { ...validation.data, status: "draft", approvedBy: null, approvedAt: null, createdBy: auth.uid, createdAt: now, updatedAt: now };
++  await adminDb.runTransaction(async transaction => {
++    transaction.create(ref, draft);
++    await writeAuditLog({ actorUserId: auth.uid, action: "IMMUNIZATION_RULE_CREATED", resourceType: "immunization_schedule_rule", resourceId: ref.id, beforeSnapshot: null, afterSnapshot: draft, reason: "Membuat draft aturan imunisasi", posyanduId: auth.posyanduId }, transaction);
++  });
++  return NextResponse.json({ success: true, ruleId: ref.id, status: "draft" }, { status: 201 });
++}
+diff --git a/src/components/forms/ImmunizationRuleManager.tsx b/src/components/forms/ImmunizationRuleManager.tsx
+new file mode 100644
+index 0000000..3530276
+--- /dev/null
++++ b/src/components/forms/ImmunizationRuleManager.tsx
+@@ -0,0 +1,71 @@
++"use client";
++
++import React, { useState } from "react";
++import { useRouter } from "next/navigation";
++import { Button } from "../ui/Button";
++import type { ApprovedScheduleRule } from "@/lib/schedule/approved-catalog";
++
++type DraftRule = ApprovedScheduleRule & { id: string };
++
++export const ImmunizationRuleManager: React.FC<{ drafts: DraftRule[] }> = ({ drafts }) => {
++  const router = useRouter();
++  const [form, setForm] = useState({ vaccineCode: "", name: "", targetAgeMonths: "", version: "", effectiveFrom: "", officialSource: "", sourceDocumentVersion: "" });
++  const [loading, setLoading] = useState(false);
++  const [message, setMessage] = useState("");
++  const [isError, setIsError] = useState(false);
++
++  const createDraft = async (event: React.FormEvent) => {
++    event.preventDefault(); setLoading(true); setMessage(""); setIsError(false);
++    try {
++      const response = await fetch("/api/immunization-rules", {
++        method: "POST", headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ ...form, targetAgeMonths: Number(form.targetAgeMonths) }),
++      });
++      const result = await response.json().catch(() => ({}));
++      if (!response.ok) throw new Error(result.error || "Draft aturan gagal dibuat.");
++      setMessage("Draft tersimpan. Aturan belum digunakan sampai disahkan reviewer.");
++      setForm({ vaccineCode: "", name: "", targetAgeMonths: "", version: "", effectiveFrom: "", officialSource: "", sourceDocumentVersion: "" });
++      router.refresh();
++    } catch (error) { setIsError(true); setMessage(error instanceof Error ? error.message : "Draft gagal dibuat."); }
++    finally { setLoading(false); }
++  };
++
++  const approve = async (id: string) => {
++    setLoading(true); setMessage(""); setIsError(false);
++    try {
++      const response = await fetch(`/api/immunization-rules/${encodeURIComponent(id)}/approve`, { method: "POST" });
++      const result = await response.json().catch(() => ({}));
++      if (!response.ok) throw new Error(result.error || "Aturan gagal disahkan.");
++      setMessage("Aturan berhasil disahkan dan dapat digunakan sesuai versi."); router.refresh();
++    } catch (error) { setIsError(true); setMessage(error instanceof Error ? error.message : "Aturan gagal disahkan."); }
++    finally { setLoading(false); }
++  };
++
++  return <div className="space-y-4">
++    <form onSubmit={createDraft} className="posyandu-card p-5 sm:p-6 space-y-3">
++      <h4 className="font-semibold text-sm sm:text-base text-slate-900">Buat Draft Aturan Imunisasi</h4>
++      <p className="text-xs text-slate-500">Masukkan data berdasarkan dokumen resmi. Draft tidak ditampilkan sebagai jadwal kepada wali.</p>
++      <div className="grid sm:grid-cols-2 gap-3">
++        <label className="block"><span className="posyandu-label">Kode vaksin</span><input required maxLength={40} className="posyandu-input" value={form.vaccineCode} onChange={e => setForm({ ...form, vaccineCode: e.target.value.toUpperCase() })} /></label>
++        <label className="block"><span className="posyandu-label">Nama vaksin</span><input required maxLength={120} className="posyandu-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
++        <label className="block"><span className="posyandu-label">Usia target (bulan)</span><input required type="number" min="0" max="240" step="1" className="posyandu-input" value={form.targetAgeMonths} onChange={e => setForm({ ...form, targetAgeMonths: e.target.value })} /></label>
++        <label className="block"><span className="posyandu-label">Versi aturan</span><input required maxLength={64} className="posyandu-input" value={form.version} onChange={e => setForm({ ...form, version: e.target.value })} /></label>
++        <label className="block"><span className="posyandu-label">Berlaku mulai</span><input required type="date" className="posyandu-input" value={form.effectiveFrom} onChange={e => setForm({ ...form, effectiveFrom: e.target.value })} /></label>
++        <label className="block"><span className="posyandu-label">Versi dokumen sumber</span><input required maxLength={80} className="posyandu-input" value={form.sourceDocumentVersion} onChange={e => setForm({ ...form, sourceDocumentVersion: e.target.value })} /></label>
++      </div>
++      <label className="block"><span className="posyandu-label">URL sumber resmi (HTTPS)</span><input required type="url" pattern="https://.*" className="posyandu-input" value={form.officialSource} onChange={e => setForm({ ...form, officialSource: e.target.value })} /></label>
++      {message && <p role={isError ? "alert" : "status"} className={`text-xs font-medium ${isError ? "text-rose-700" : "text-emerald-700"}`}>{message}</p>}
++      <Button type="submit" disabled={loading}>{loading ? "Menyimpan..." : "Simpan sebagai draft"}</Button>
++    </form>
++    <div className="posyandu-card p-5 sm:p-6 space-y-3">
++      <h4 className="font-semibold text-sm sm:text-base text-slate-900">Draft Menunggu Persetujuan ({drafts.length})</h4>
++      {drafts.length === 0 && <p className="text-xs text-slate-500">Belum ada draft aturan imunisasi.</p>}
++      {drafts.map(rule => <div key={rule.id} className="rounded-lg border border-slate-200 p-3 space-y-2">
++        <div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm">{rule.name} ({rule.vaccineCode})</strong><span className="text-xs text-amber-700">Draft · v{rule.version}</span></div>
++        <p className="text-xs text-slate-600">Target usia: {rule.targetAgeMonths} bulan · Berlaku: {rule.effectiveFrom} · Sumber: {rule.sourceDocumentVersion}</p>
++        <a className="text-xs text-emerald-700 underline break-all" href={rule.officialSource} target="_blank" rel="noreferrer noopener">Periksa dokumen sumber</a>
++        <Button type="button" disabled={loading} onClick={() => approve(rule.id)}>Sahkan aturan</Button>
++      </div>)}
++    </div>
++  </div>;
++};
+diff --git a/src/lib/growth/lms.ts b/src/lib/growth/lms.ts
+new file mode 100644
+index 0000000..ea99914
+--- /dev/null
++++ b/src/lib/growth/lms.ts
+@@ -0,0 +1,54 @@
++/**
++ * Generic LMS calculation primitives.
++ * This is mathematics only, not an approved WHO reference dataset or a clinical
++ * classification. Production callers must supply a provenance-verified row.
++ */
++export type LmsPoint = { l: number; m: number; s: number };
++
++export function calculateLmsZScore(value: number, point: LmsPoint): number | null {
++  if (!Number.isFinite(value) || value <= 0
++    || !Number.isFinite(point.l)
++    || !Number.isFinite(point.m) || point.m <= 0
++    || !Number.isFinite(point.s) || point.s <= 0) return null;
++
++  const ratio = value / point.m;
++  const z = Math.abs(point.l) < 1e-10
++    ? Math.log(ratio) / point.s
++    : (Math.pow(ratio, point.l) - 1) / (point.l * point.s);
++  return Number.isFinite(z) ? z : null;
++}
++
++export type LmsDatasetRow = LmsPoint & {
++  indicator: "WAZ" | "LAZ_HAZ" | "WLZ_WHZ";
++  sex: "male" | "female";
++  measure: "age_months" | "length_height_cm";
++  at: number;
++};
++
++export function validateLmsDatasetRows(rows: unknown): { valid: boolean; errors: string[] } {
++  const errors: string[] = [];
++  if (!Array.isArray(rows) || rows.length === 0) {
++    return { valid: false, errors: ["DATASET_EMPTY_OR_NOT_ARRAY"] };
++  }
++  const seen = new Set<string>();
++  for (const [index, raw] of rows.entries()) {
++    if (!raw || typeof raw !== "object") {
++      errors.push(`ROW_${index}_NOT_OBJECT`);
++      continue;
++    }
++    const row = raw as Record<string, unknown>;
++    if (!["WAZ", "LAZ_HAZ", "WLZ_WHZ"].includes(String(row.indicator))) errors.push(`ROW_${index}_INVALID_INDICATOR`);
++    if (!["male", "female"].includes(String(row.sex))) errors.push(`ROW_${index}_INVALID_SEX`);
++    if (!["age_months", "length_height_cm"].includes(String(row.measure))) errors.push(`ROW_${index}_INVALID_MEASURE`);
++    if ((row.indicator === "WAZ" || row.indicator === "LAZ_HAZ") && row.measure !== "age_months") errors.push(`ROW_${index}_INDICATOR_MEASURE_MISMATCH`);
++    if (row.indicator === "WLZ_WHZ" && row.measure !== "length_height_cm") errors.push(`ROW_${index}_INDICATOR_MEASURE_MISMATCH`);
++    if (![row.at, row.l, row.m, row.s].every(value => typeof value === "number" && Number.isFinite(value))) errors.push(`ROW_${index}_NON_FINITE_VALUE`);
++    if (typeof row.at === "number" && row.at < 0) errors.push(`ROW_${index}_NEGATIVE_COORDINATE`);
++    if (typeof row.m === "number" && row.m <= 0) errors.push(`ROW_${index}_INVALID_M`);
++    if (typeof row.s === "number" && row.s <= 0) errors.push(`ROW_${index}_INVALID_S`);
++    const key = [row.indicator, row.sex, row.measure, row.at].join(":");
++    if (seen.has(key)) errors.push(`ROW_${index}_DUPLICATE_COORDINATE`);
++    seen.add(key);
++  }
++  return { valid: errors.length === 0, errors };
++}
+diff --git a/src/lib/schedule/approved-catalog.ts b/src/lib/schedule/approved-catalog.ts
+index 7482997..96a240d 100644
+--- a/src/lib/schedule/approved-catalog.ts
++++ b/src/lib/schedule/approved-catalog.ts
+@@ -13,11 +13,18 @@ export type ApprovedScheduleRule = {
+ };
+ 
+ export function isScheduleRuleUsable(rule: ApprovedScheduleRule): boolean {
+-  return rule.status === "approved"
+-    && Number.isInteger(rule.targetAgeMonths) && rule.targetAgeMonths >= 0
+-    && [rule.id, rule.vaccineCode, rule.name, rule.version, rule.effectiveFrom,
+-      rule.officialSource, rule.sourceDocumentVersion, rule.approvedBy, rule.approvedAt]
+-      .every(value => typeof value === "string" && value.trim().length > 0);
++  if (rule.status !== "approved" || !Number.isInteger(rule.targetAgeMonths)
++    || rule.targetAgeMonths < 0 || rule.targetAgeMonths > 240) return false;
++  if (![rule.id, rule.vaccineCode, rule.name, rule.version, rule.effectiveFrom,
++    rule.officialSource, rule.sourceDocumentVersion, rule.approvedBy, rule.approvedAt]
++    .every(value => typeof value === "string" && value.trim().length > 0)) return false;
++  if (!/^\d{4}-\d{2}-\d{2}$/.test(rule.effectiveFrom)) return false;
++  const effectiveDate = new Date(`${rule.effectiveFrom}T00:00:00.000Z`);
++  const approvalDate = new Date(rule.approvedAt!);
++  if (Number.isNaN(effectiveDate.getTime()) || effectiveDate.toISOString().slice(0, 10) !== rule.effectiveFrom
++    || Number.isNaN(approvalDate.getTime())) return false;
++  try { return new URL(rule.officialSource).protocol === "https:"; }
++  catch { return false; }
+ }
+ 
+ export function getApprovedUpcomingRules(
+diff --git a/tests/clinical-core-phase2.test.ts b/tests/clinical-core-phase2.test.ts
+new file mode 100644
+index 0000000..0fed9c8
+--- /dev/null
++++ b/tests/clinical-core-phase2.test.ts
+@@ -0,0 +1,50 @@
++import test from "node:test";
++import assert from "node:assert/strict";
++import { calculateLmsZScore, validateLmsDatasetRows } from "../src/lib/growth/lms.ts";
++import { canApproveImmunizationRule, validateImmunizationRuleDraft } from "../src/lib/schedule/immunization-rule-validation.ts";
++import { isScheduleRuleUsable } from "../src/lib/schedule/approved-catalog.ts";
++
++test("LMS formula handles L=0 and non-zero L without classifying clinically", () => {
++  assert.equal(calculateLmsZScore(12, { l: 0, m: 10, s: 0.1 }), Math.log(1.2) / 0.1);
++  assert.ok(Math.abs((calculateLmsZScore(12, { l: 1, m: 10, s: 0.1 }) ?? 0) - 2) < 1e-12);
++  assert.equal(calculateLmsZScore(0, { l: 0, m: 10, s: 0.1 }), null);
++  assert.equal(calculateLmsZScore(12, { l: 0, m: 0, s: 0.1 }), null);
++});
++
++test("LMS dataset validator rejects empty, duplicate and invalid rows", () => {
++  assert.equal(validateLmsDatasetRows([]).valid, false);
++  const row = { indicator: "WAZ", sex: "female", measure: "age_months", at: 12, l: 0, m: 9, s: 0.1 };
++  assert.equal(validateLmsDatasetRows([row]).valid, true);
++  assert.equal(validateLmsDatasetRows([{ ...row, measure: "length_height_cm" }]).valid, false);
++  const duplicate = validateLmsDatasetRows([row, row]);
++  assert.equal(duplicate.valid, false);
++  assert.ok(duplicate.errors.includes("ROW_1_DUPLICATE_COORDINATE"));
++});
++
++test("immunization rule drafts require complete metadata and HTTPS source", () => {
++  const draft = { vaccineCode: "VAX-01", name: "Contoh label dari sumber", targetAgeMonths: 6,
++    version: "2026.1", effectiveFrom: "2026-01-01", officialSource: "https://example.org/official.pdf",
++    sourceDocumentVersion: "2026" };
++  assert.equal(validateImmunizationRuleDraft(draft).valid, true);
++  assert.equal(validateImmunizationRuleDraft({ ...draft, officialSource: "http://example.org" }).valid, false);
++  assert.equal(validateImmunizationRuleDraft({ ...draft, targetAgeMonths: -1 }).valid, false);
++});
++
++test("only complete draft rules can be approved", () => {
++  const draft = { id: "r1", vaccineCode: "VAX-01", name: "Vaccine", targetAgeMonths: 6,
++    version: "2026.1", effectiveFrom: "2026-01-01", officialSource: "https://example.org/source",
++    sourceDocumentVersion: "2026", status: "draft" };
++  assert.equal(canApproveImmunizationRule(draft), true);
++  assert.equal(canApproveImmunizationRule({ ...draft, status: "approved" }), false);
++  assert.equal(canApproveImmunizationRule({ ...draft, officialSource: "http://example.org" }), false);
++});
++
++
++test("approved schedule rules require HTTPS provenance and valid approval metadata", () => {
++  const rule = { id: "r1", vaccineCode: "VAX-01", name: "Vaccine", targetAgeMonths: 6,
++    version: "2026.1", effectiveFrom: "2026-01-01", officialSource: "https://example.org/source",
++    sourceDocumentVersion: "2026", status: "approved" as const, approvedBy: "reviewer-1", approvedAt: "2026-01-02T00:00:00.000Z" };
++  assert.equal(isScheduleRuleUsable(rule), true);
++  assert.equal(isScheduleRuleUsable({ ...rule, officialSource: "DATA DEMO — bukan jadwal resmi" }), false);
++  assert.equal(isScheduleRuleUsable({ ...rule, approvedAt: "not-a-date" }), false);
++});
+diff --git a/tests/clinical-governance.test.ts b/tests/clinical-governance.test.ts
+index d2e73d4..4eb4ae9 100644
+--- a/tests/clinical-governance.test.ts
++++ b/tests/clinical-governance.test.ts
+@@ -21,7 +21,7 @@ test("growth reference metadata requires provenance and checksum", () => {
+ test("draft or incomplete immunization rules are never presented as upcoming", () => {
+   const base = {
+     id: "r1", vaccineCode: "V1", name: "Vaccine", targetAgeMonths: 6, version: "1",
+-    effectiveFrom: "2026-01-01", officialSource: "Official source",
++    effectiveFrom: "2026-01-01", officialSource: "https://example.org/official",
+     sourceDocumentVersion: "2026", approvedBy: "clinician", approvedAt: "2026-01-02",
+   };
+   assert.equal(isScheduleRuleUsable({ ...base, status: "draft" }), false);
+diff --git a/tests/demo-dataset.test.ts b/tests/demo-dataset.test.ts
+index 9a53617..3716aee 100644
+--- a/tests/demo-dataset.test.ts
++++ b/tests/demo-dataset.test.ts
+@@ -186,7 +186,8 @@ test("each role has something to look at (queues and states are populated)", ()
+   for (const status of ["granted", "withdrawn", "declined"]) assert.ok(count("consent_records", r => r.consentStatus === status) >= 1, `consent ${status}`);
+   for (const status of ["approved", "pending_review"]) assert.ok(count("knowledge_documents", d => d.status === status) >= 1, `knowledge ${status}`);
+   for (const status of ["published", "draft", "deprecated"]) assert.ok(count("education_content", d => d.status === status) >= 1, `education ${status}`);
+-  for (const status of ["approved", "draft", "retired"]) assert.ok(count("immunization_schedule_rules", d => d.status === status) >= 1, `rule ${status}`);
++  for (const status of ["draft", "retired"]) assert.ok(count("immunization_schedule_rules", d => d.status === status) >= 1, `rule ${status}`);
++  assert.equal(count("immunization_schedule_rules", d => d.status === "approved"), 0, "demo immunization rules must never be approved");
+   for (const status of ["active", "archived", "needs_verification"]) assert.ok(count("children", c => c.recordStatus === status) >= 1, `child ${status}`);
+   const actions = new Set(docs(ds, "audit_logs").map(d => d.data.action));
+   for (const a of ["VERIFY_VISIT", "REJECT_VISIT_VERIFICATION", "CORRECT_VISIT_DATA", "VERIFY_SERVICE_EVENT", "REJECT_SERVICE_EVENT",
+@@ -196,17 +197,16 @@ test("each role has something to look at (queues and states are populated)", ()
+   assert.deepEqual(logs.map(l => l.timestamp), [...logs.map(l => l.timestamp)].sort());
+ });
+ 
+-test("approved reference data is usable by the app; --draft-reference-only keeps it unapproved", () => {
++test("demo immunization rules remain unapproved and never appear as clinical reminders", () => {
+   const ds = build(2);
+   const rules = docs(ds, "immunization_schedule_rules").map(d => ({ id: d.id, ...d.data }) as unknown as ApprovedScheduleRule);
+-  const usable = rules.filter(isScheduleRuleUsable);
+-  assert.ok(usable.length >= 5);
+-  assert.ok(usable.every(r => r.officialSource.includes("DEMO") && r.name.startsWith("[DEMO]")));
++  assert.equal(rules.filter(r => r.status === "approved").length, 0);
++  assert.equal(rules.filter(isScheduleRuleUsable).length, 0);
+   const children = docs(ds, "children").map((d): Record<string, any> => ({ id: d.id, ...d.data }));
+   const infant = children.find(c => c.registrationNumber === "DEMO-001")!;
+   const age = calculateAgeMonths(infant.dateOfBirth, ds.today);
+   const recorded = docs(ds, "immunization_events").filter(d => d.data.childId === infant.id && d.data.verificationStatus === "verified").map(d => d.data.vaccineCode);
+-  assert.ok(getApprovedUpcomingRules(rules, age, recorded).length >= 1, "parent of the youngest child sees upcoming demo rules");
++  assert.equal(getApprovedUpcomingRules(rules, age, recorded).length, 0, "demo rules must not appear as upcoming immunizations");
+   for (const d of docs(ds, "knowledge_documents").filter(d => d.data.status === "approved")) {
+     assert.ok(d.data.sourceTitle && d.data.reviewedAt && d.data.reviewedBy, "approved docs are retrievable by the AI retriever");
+   }

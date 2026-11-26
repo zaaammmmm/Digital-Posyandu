@@ -13,11 +13,18 @@ export type ApprovedScheduleRule = {
 };
 
 export function isScheduleRuleUsable(rule: ApprovedScheduleRule): boolean {
-  return rule.status === "approved"
-    && Number.isInteger(rule.targetAgeMonths) && rule.targetAgeMonths >= 0
-    && [rule.id, rule.vaccineCode, rule.name, rule.version, rule.effectiveFrom,
-      rule.officialSource, rule.sourceDocumentVersion, rule.approvedBy, rule.approvedAt]
-      .every(value => typeof value === "string" && value.trim().length > 0);
+  if (rule.status !== "approved" || !Number.isInteger(rule.targetAgeMonths)
+    || rule.targetAgeMonths < 0 || rule.targetAgeMonths > 240) return false;
+  if (![rule.id, rule.vaccineCode, rule.name, rule.version, rule.effectiveFrom,
+    rule.officialSource, rule.sourceDocumentVersion, rule.approvedBy, rule.approvedAt]
+    .every(value => typeof value === "string" && value.trim().length > 0)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(rule.effectiveFrom)) return false;
+  const effectiveDate = new Date(`${rule.effectiveFrom}T00:00:00.000Z`);
+  const approvalDate = new Date(rule.approvedAt!);
+  if (Number.isNaN(effectiveDate.getTime()) || effectiveDate.toISOString().slice(0, 10) !== rule.effectiveFrom
+    || Number.isNaN(approvalDate.getTime())) return false;
+  try { return new URL(rule.officialSource).protocol === "https:"; }
+  catch { return false; }
 }
 
 export function getApprovedUpcomingRules(

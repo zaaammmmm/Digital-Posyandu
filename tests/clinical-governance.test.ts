@@ -21,7 +21,7 @@ test("growth reference metadata requires provenance and checksum", () => {
 test("draft or incomplete immunization rules are never presented as upcoming", () => {
   const base = {
     id: "r1", vaccineCode: "V1", name: "Vaccine", targetAgeMonths: 6, version: "1",
-    effectiveFrom: "2026-01-01", officialSource: "Official source",
+    effectiveFrom: "2026-01-01", officialSource: "https://example.org/official",
     sourceDocumentVersion: "2026", approvedBy: "clinician", approvedAt: "2026-01-02",
   };
   assert.equal(isScheduleRuleUsable({ ...base, status: "draft" }), false);

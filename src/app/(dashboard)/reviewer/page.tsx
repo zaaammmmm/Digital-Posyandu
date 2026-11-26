@@ -5,6 +5,7 @@ import type { Row } from "@/lib/data/rows";
 import { KnowledgeCreateForm } from "@/components/forms/KnowledgeCreateForm";
 import { KnowledgeReviewActions } from "@/components/forms/KnowledgeReviewActions";
 import { isScheduleRuleUsable, ApprovedScheduleRule } from "@/lib/schedule/approved-catalog";
+import { ImmunizationRuleManager } from "@/components/forms/ImmunizationRuleManager";
 
 export default async function ContentReviewerPage() {
   await requirePageContext(["content_reviewer", "system_admin"]);
@@ -14,6 +15,7 @@ export default async function ContentReviewerPage() {
   ]);
   const rules = rulesSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, unknown>) }) as unknown as ApprovedScheduleRule);
   const usable = rules.filter(isScheduleRuleUsable);
+  const drafts = rules.filter(rule => rule.status === "draft");
   const knowledgeApproved = knowledgeSnap.docs.filter(d => d.data().status === "approved").length;
   const pending = knowledgeSnap.docs
     .filter(d => d.data().status === "pending_review")
@@ -47,6 +49,7 @@ export default async function ContentReviewerPage() {
           {knowledgeApproved} dokumen berstatus approved dari {knowledgeSnap.size} dokumen tersimpan.
         </p>
       </div>
+      <ImmunizationRuleManager drafts={drafts} />
       <KnowledgeCreateForm />
       <div className="posyandu-card p-5 sm:p-6 space-y-4">
         <h4 className="font-semibold text-sm sm:text-base text-slate-900">Menunggu Peninjauan ({pending.length})</h4>
