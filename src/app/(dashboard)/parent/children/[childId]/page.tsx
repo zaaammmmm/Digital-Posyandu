@@ -14,6 +14,7 @@ const REQUEST_LABEL: Record<string, string> = {
   pending_review: "Menunggu tinjauan petugas",
   accepted_pending_correction: "Diterima, menunggu koreksi data oleh petugas",
   rejected: "Ditolak petugas",
+  corrected: "Sudah dikoreksi petugas",
 };
 
 export default async function ChildDetailPage({ params }: { params: Promise<{ childId: string }> }) {
@@ -24,11 +25,14 @@ export default async function ChildDetailPage({ params }: { params: Promise<{ ch
   if (!childSnap.exists || !child || child.posyanduId !== ctx.posyanduId
       || !Array.isArray(child.guardianUids) || !child.guardianUids.includes(ctx.uid)) notFound();
 
-  const [visitSnap, measSnap, immSnap, summarySnap, requestSnap, rulesSnap] = await Promise.all([
+  const [visitSnap, measSnap, immSnap, suppSnap, summarySnap, requestSnap, rulesSnap] = await Promise.all([
     adminDb.collection("visits").where("childId", "==", childId).where("posyanduId", "==", ctx.posyanduId).limit(100).get(),
     adminDb.collection("anthropometry_measurements").where("childId", "==", childId)
       .where("posyanduId", "==", ctx.posyanduId).where("verificationStatus", "==", "verified").limit(100).get(),
-    adminDb.collection("immunization_events").where("childId", "==", childId).where("posyanduId", "==", ctx.posyanduId).limit(100).get(),
+    adminDb.collection("immunization_events").where("childId", "==", childId).where("posyanduId", "==", ctx.posyanduId)
+      .where("verificationStatus", "==", "verified").limit(100).get(),
+    adminDb.collection("supplement_events").where("childId", "==", childId).where("posyanduId", "==", ctx.posyanduId)
+      .where("verificationStatus", "==", "verified").limit(100).get(),
     adminDb.collection("ai_summaries").where("childId", "==", childId).where("posyanduId", "==", ctx.posyanduId).limit(50).get(),
     adminDb.collection("correction_requests").where("requestedBy", "==", ctx.uid).where("posyanduId", "==", ctx.posyanduId).limit(100).get(),
     adminDb.collection("immunization_schedule_rules").where("status", "==", "approved").limit(200).get(),
@@ -58,6 +62,8 @@ export default async function ChildDetailPage({ params }: { params: Promise<{ ch
   }
 
   const immunizations = rowsOf(immSnap)
+    .sort((a, b) => String(b.administrationDate).localeCompare(String(a.administrationDate)));
+  const supplements = rowsOf(suppSnap)
     .sort((a, b) => String(b.administrationDate).localeCompare(String(a.administrationDate)));
   let ageMonths = -1;
   try { ageMonths = calculateAgeMonths(String(child.dateOfBirth), todayInJakarta()); } catch { /* invalid dob */ }
@@ -107,10 +113,18 @@ export default async function ChildDetailPage({ params }: { params: Promise<{ ch
       <section className="posyandu-card p-5 space-y-3">
         <h3 className="font-bold text-sm text-slate-900">Imunisasi &amp; Jadwal</h3>
         <p className="text-xs text-slate-500">Status &ldquo;belum tercatat&rdquo; tidak berarti belum diberikan. Konfirmasikan dengan Posyandu atau Puskesmas.</p>
-        {immunizations.length === 0 ? <p className="text-sm text-slate-600">Belum ada imunisasi tercatat pada aplikasi ini.</p> : (
+        {immunizations.length === 0 ? <p className="text-sm text-slate-600">Belum ada imunisasi terverifikasi pada aplikasi ini.</p> : (
           <ul className="space-y-1 text-sm text-slate-800">
             {immunizations.map(i => <li key={i.id}>{String(i.administrationDate)} &mdash; {String(i.vaccineCode)}{i.doseSequence ? ` (dosis ${String(i.doseSequence)})` : ""}</li>)}
           </ul>
+        )}
+        {supplements.length > 0 && (
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold text-slate-700">Vitamin &amp; suplemen terverifikasi</h4>
+            <ul className="space-y-1 text-sm text-slate-800">
+              {supplements.map(s => <li key={s.id}>{String(s.administrationDate)} &mdash; {String(s.supplementType)}</li>)}
+            </ul>
+          </div>
         )}
         {upcoming.length === 0 ? (
           <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">

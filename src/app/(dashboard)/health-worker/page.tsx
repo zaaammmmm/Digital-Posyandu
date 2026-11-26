@@ -5,17 +5,34 @@ import { adminDb } from "@/lib/firebase/admin";
 import { rowsOf } from "@/lib/data/rows";
 import { requirePageContext } from "@/lib/auth/page-context";
 import { lookupChildLabels } from "@/lib/data/child-lookup";
+import { ServiceEventReviewActions } from "@/components/forms/ServiceEventReviewActions";
 
 export default async function HealthWorkerDashboard() {
   const ctx = await requirePageContext(["health_worker"]);
-  const [visitSnap, measSnap, correctionCount] = await Promise.all([
+  const [visitSnap, measSnap, correctionCount, immSnap, suppSnap] = await Promise.all([
     adminDb.collection("visits").where("posyanduId", "==", ctx.posyanduId)
       .where("verificationStatus", "==", "pending_verification").limit(100).get(),
     adminDb.collection("anthropometry_measurements").where("posyanduId", "==", ctx.posyanduId)
       .where("verificationStatus", "==", "pending_verification").limit(300).get(),
     adminDb.collection("correction_requests").where("posyanduId", "==", ctx.posyanduId)
       .where("status", "==", "pending_review").count().get(),
+    adminDb.collection("immunization_events").where("posyanduId", "==", ctx.posyanduId)
+      .where("verificationStatus", "==", "pending_verification").limit(100).get(),
+    adminDb.collection("supplement_events").where("posyanduId", "==", ctx.posyanduId)
+      .where("verificationStatus", "==", "pending_verification").limit(100).get(),
   ]);
+  type ServiceEvent = { id: string; kind: "immunization" | "supplement"; childId: string; administrationDate: string; label: string };
+  const serviceEvents: ServiceEvent[] = [
+    ...rowsOf(immSnap).map((e): ServiceEvent => ({
+      id: e.id, kind: "immunization", childId: String(e.childId), administrationDate: String(e.administrationDate),
+      label: String(e.vaccineCode) + (e.doseSequence ? ` (dosis ${String(e.doseSequence)})` : ""),
+    })),
+    ...rowsOf(suppSnap).map((e): ServiceEvent => ({
+      id: e.id, kind: "supplement", childId: String(e.childId), administrationDate: String(e.administrationDate),
+      label: String(e.supplementType),
+    })),
+  ].sort((a, b) => a.administrationDate.localeCompare(b.administrationDate));
+  const serviceLabels = await lookupChildLabels(ctx.posyanduId, serviceEvents.map(e => String(e.childId)));
   const visits = rowsOf(visitSnap)
     .sort((a, b) => String(a.visitDate).localeCompare(String(b.visitDate)));
   const labels = await lookupChildLabels(ctx.posyanduId, visits.map(v => String(v.childId)));
@@ -77,6 +94,35 @@ export default async function HealthWorkerDashboard() {
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-sm font-bold text-slate-900">Imunisasi &amp; Vitamin Menunggu Verifikasi ({serviceEvents.length})</h2>
+        <div className="posyandu-table-wrap">
+          <table className="posyandu-table">
+            <thead className="posyandu-thead">
+              <tr>
+                <th className="posyandu-th">Tanggal</th>
+                <th className="posyandu-th">Nama Anak</th>
+                <th className="posyandu-th">Layanan</th>
+                <th className="posyandu-th">Tindakan</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {serviceEvents.length === 0 && (
+                <tr><td className="posyandu-td text-slate-500" colSpan={4}>Tidak ada catatan imunisasi atau vitamin yang menunggu verifikasi.</td></tr>
+              )}
+              {serviceEvents.map(e => (
+                <tr key={`${e.kind}-${e.id}`}>
+                  <td className="posyandu-td whitespace-nowrap">{String(e.administrationDate)}</td>
+                  <td className="posyandu-td font-semibold text-slate-900">{serviceLabels.get(String(e.childId))?.fullName || "-"}</td>
+                  <td className="posyandu-td">{e.kind === "immunization" ? "Imunisasi" : "Vitamin"}: {e.label}</td>
+                  <td className="posyandu-td"><ServiceEventReviewActions kind={e.kind} eventId={e.id} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

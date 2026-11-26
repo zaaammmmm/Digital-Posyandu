@@ -9,6 +9,7 @@ const STATUS_LABEL: Record<string, string> = {
   pending_review: "Menunggu tinjauan",
   accepted_pending_correction: "Diterima, menunggu koreksi data",
   rejected: "Ditolak",
+  corrected: "Sudah dikoreksi",
 };
 
 export default async function CorrectionQueuePage() {
@@ -37,6 +38,10 @@ export default async function CorrectionQueuePage() {
               <span>{String(item.createdAt).slice(0, 10)} &bull; {STATUS_LABEL[String(item.status)] || String(item.status)}</span>
             </div>
             <p className="text-sm text-slate-800">{String(item.reason)}</p>
+            {item.status === "accepted_pending_correction" && (
+              <Link href={`/health-worker/verifications/${String(item.visitId)}/correct`}
+                className="inline-block text-sm font-semibold text-emerald-700 hover:underline">Koreksi nilai</Link>
+            )}
             {item.status === "pending_review"
               ? <CorrectionReviewActions requestId={item.id} />
               : typeof item.reviewNote === "string" && <p className="text-xs text-slate-600">Catatan petugas: {item.reviewNote}</p>}

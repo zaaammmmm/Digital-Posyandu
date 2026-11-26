@@ -2,6 +2,7 @@ import React from "react";
 import { adminDb } from "@/lib/firebase/admin";
 import { requirePageContext } from "@/lib/auth/page-context";
 import type { Row } from "@/lib/data/rows";
+import { KnowledgeCreateForm } from "@/components/forms/KnowledgeCreateForm";
 import { KnowledgeReviewActions } from "@/components/forms/KnowledgeReviewActions";
 import { isScheduleRuleUsable, ApprovedScheduleRule } from "@/lib/schedule/approved-catalog";
 
@@ -46,6 +47,7 @@ export default async function ContentReviewerPage() {
           {knowledgeApproved} dokumen berstatus approved dari {knowledgeSnap.size} dokumen tersimpan.
         </p>
       </div>
+      <KnowledgeCreateForm />
       <div className="posyandu-card p-5 sm:p-6 space-y-4">
         <h4 className="font-bold text-sm sm:text-base text-slate-900">Menunggu Peninjauan ({pending.length})</h4>
         {pending.length === 0 && <p className="text-xs sm:text-sm text-slate-600">Tidak ada materi yang menunggu peninjauan.</p>}
@@ -54,7 +56,7 @@ export default async function ContentReviewerPage() {
             <p className="text-sm font-semibold text-slate-900">{String(doc.title)}</p>
             <p className="text-xs text-slate-500">
               Sumber: {String(doc.sourceTitle)} &bull; Versi {String(doc.version)}
-              {doc.sourceUrl ? <> &bull; <a className="text-emerald-700 hover:underline" href={String(doc.sourceUrl)} target="_blank" rel="noreferrer noopener">tautan sumber</a></> : null}
+              {/^https?:\/\//i.test(String(doc.sourceUrl || "")) ? <> &bull; <a className="text-emerald-700 hover:underline" href={String(doc.sourceUrl)} target="_blank" rel="noreferrer noopener">tautan sumber</a></> : null}
             </p>
             <p className="text-xs sm:text-sm text-slate-700 whitespace-pre-line">{String(doc.text).slice(0, 600)}</p>
             <KnowledgeReviewActions documentId={doc.id} />

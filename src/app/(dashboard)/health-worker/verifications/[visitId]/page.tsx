@@ -57,6 +57,10 @@ export default async function VerifyVisitDetailPage({ params }: { params: Promis
       {status === "pending_verification" && meas
         ? <VerifyActions visitId={visitId} />
         : <p className="text-xs text-slate-500">Kunjungan ini tidak berada pada status menunggu verifikasi.</p>}
+      {meas && (
+        <Link href={`/health-worker/verifications/${visitId}/correct`}
+          className="block text-center text-xs font-semibold text-emerald-700 hover:underline">Koreksi nilai pengukuran</Link>
+      )}
       <Link href="/health-worker" className="block text-center text-xs font-semibold text-emerald-700 hover:underline">Kembali ke antrean</Link>
     </div>
   );

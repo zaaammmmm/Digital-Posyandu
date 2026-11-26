@@ -45,7 +45,14 @@ export async function POST(req: NextRequest, context: { params: Promise<{ visitI
     verificationStatus: "pending_verification",
     qualityFlags: [...validation.qualityFlags, "CORRECTED_REQUIRES_REVERIFICATION"],
     measuredAt: now, recordedBy: auth.uid };
+  // Accepted guardian requests for this visit are closed by the correction.
+  const openRequests = await adminDb.collection("correction_requests")
+    .where("posyanduId", "==", auth.posyanduId).where("visitId", "==", visitId)
+    .where("status", "==", "accepted_pending_correction").get();
   await adminDb.runTransaction(async tx => {
+    for (const request of openRequests.docs) {
+      tx.update(request.ref, { status: "corrected", correctedBy: auth.uid, correctedAt: now });
+    }
     tx.update(oldDoc.ref, { supersededAt: now, supersededBy: newRef.id });
     tx.set(newRef, newData);
     tx.update(visitRef, { verificationStatus: "pending_verification", version, updatedAt: now, correctionReason: body.reason.trim() });

@@ -33,3 +33,9 @@ persetujuan tenaga kesehatan, atau penilaian privasi.
 - All dashboard pages now have role guards (`/admin`, `/cadre/administration`, `/cadre/guides`, `/cadre/children/new`, `/parent`); the sidebar is filtered by the membership role.
 - New: immunization/vitamin form for cadre, head circumference / MUAC / method / equipment fields in the visit form, administration book connected to its API, Posyandu profile editor, reviewer approval of pending knowledge documents.
 - Not included: reviewer approval of immunization schedule rules (no API/governance flow yet), development screening, WHO reference dataset.
+
+## Verification, correction screen and reviewer content patch
+
+- Immunization and vitamin records created by cadre now go through `POST /api/immunizations/{id}/review` and `/api/supplements/{id}/review` (health_worker only, reason required for rejection, audited). Guardians only see verified records.
+- Bidan correction screen at `/health-worker/verifications/{visitId}/correct`; a correction closes accepted guardian requests for that visit (`status: corrected`).
+- Reviewers can submit new knowledge documents (source URL must be http/https); the cadre guide page lists approved documents with search and source/version metadata.

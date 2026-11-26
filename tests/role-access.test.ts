@@ -62,3 +62,28 @@ test("firestore rules no longer grant system_admin health-data reads", () => {
   assert.doesNotMatch(rules, /function staffRoles\(\) \{[^}]*system_admin/);
   assert.match(rules, /correction_requests[\s\S]*roleIn\(resource\.data\.posyanduId, \['health_worker'\]\)/);
 });
+
+test("service event review (immunization/vitamin) is health_worker only and audited", () => {
+  const shared = read("../src/lib/data/service-event-review.ts");
+  assert.match(shared, /requireAuth\(req, \["health_worker"\]\)/);
+  assert.match(shared, /VERIFY_SERVICE_EVENT/);
+  assert.match(shared, /REJECT_SERVICE_EVENT/);
+  assert.match(shared, /reason\.length < 5/);
+  assert.match(read("../src/app/api/immunizations/[eventId]/review/route.ts"), /"immunization_events"/);
+  assert.match(read("../src/app/api/supplements/[eventId]/review/route.ts"), /"supplement_events"/);
+});
+
+test("guardians only see verified immunizations and vitamins", () => {
+  const page = read("../src/app/(dashboard)/parent/children/[childId]/page.tsx");
+  assert.equal((page.match(/\.where\("verificationStatus", "==", "verified"\)/g) || []).length >= 3, true);
+});
+
+test("correction screen is bidan-only and closes accepted requests", () => {
+  assert.match(read("../src/app/(dashboard)/health-worker/verifications/[visitId]/correct/page.tsx"), /requirePageContext\(\["health_worker"\]\)/);
+  assert.match(read("../src/app/api/visits/[visitId]/correct/route.ts"), /status: "corrected"/);
+});
+
+test("knowledge submissions only accept http(s) source links, and guides show approved material only", () => {
+  assert.match(read("../src/app/api/knowledge/route.ts"), /protocol === "https:" \|\| u\.protocol === "http:"/);
+  assert.match(read("../src/app/(dashboard)/cadre/guides/page.tsx"), /where\("status", "==", "approved"\)/);
+});
