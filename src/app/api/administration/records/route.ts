@@ -60,3 +60,75 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Catatan administrasi gagal disimpan" }, { status: 500 });
   }
 }
+
+
+export async function PATCH(req: NextRequest) {
+  const auth = await requireAuth(req, ["cadre", "posyandu_admin"]);
+  if (isAuthError(auth)) return auth;
+  try {
+    const body = await req.json();
+    const id = typeof body.id === "string" ? body.id.trim() : "";
+    if (!id) return NextResponse.json({ error: "ID catatan wajib diisi." }, { status: 400 });
+    const ref = adminDb.collection("administrative_records").doc(id);
+    await adminDb.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists || snap.data()?.posyanduId !== auth.posyanduId) throw new Error("NOT_FOUND");
+      const changes: Record<string, unknown> = {};
+      if (body.title !== undefined) {
+        if (typeof body.title !== "string" || !body.title.trim()) throw new Error("INVALID_TITLE");
+        changes.title = body.title.trim().slice(0, 160);
+      }
+      if (body.description !== undefined) {
+        if (typeof body.description !== "string") throw new Error("INVALID_DESCRIPTION");
+        changes.description = body.description.trim().slice(0, 4000);
+      }
+      if (body.recordDate !== undefined) {
+        if (!validDate(body.recordDate)) throw new Error("INVALID_DATE");
+        changes.recordDate = body.recordDate;
+      }
+      if (body.type !== undefined) {
+        if (!RECORD_TYPES.includes(body.type as RecordType)) throw new Error("INVALID_TYPE");
+        changes.type = body.type;
+      }
+      if (!Object.keys(changes).length) throw new Error("NO_CHANGES");
+      changes.updatedAt = new Date().toISOString();
+      changes.updatedBy = auth.uid;
+      tx.update(ref, changes);
+      await writeAuditLog({ actorUserId: auth.uid, action: "UPDATE_ADMINISTRATIVE_RECORD",
+        resourceType: "administrative_record", resourceId: id, beforeSnapshot: snap.data() || null,
+        afterSnapshot: { ...snap.data(), ...changes }, reason: "Pembaruan catatan administrasi",
+        posyanduId: auth.posyanduId }, tx);
+    });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    const messages: Record<string, string> = { NOT_FOUND: "Catatan tidak ditemukan.", INVALID_TITLE: "Judul tidak valid.",
+      INVALID_DESCRIPTION: "Keterangan tidak valid.", INVALID_DATE: "Tanggal tidak valid.", INVALID_TYPE: "Jenis tidak valid.", NO_CHANGES: "Tidak ada perubahan." };
+    return NextResponse.json({ error: messages[code] || "Catatan administrasi gagal diperbarui." },
+      { status: code === "NOT_FOUND" ? 404 : messages[code] ? 400 : 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const auth = await requireAuth(req, ["posyandu_admin"]);
+  if (isAuthError(auth)) return auth;
+  const id = req.nextUrl.searchParams.get("id")?.trim();
+  if (!id) return NextResponse.json({ error: "ID catatan wajib diisi." }, { status: 400 });
+  try {
+    await adminDb.runTransaction(async tx => {
+      const ref = adminDb.collection("administrative_records").doc(id);
+      const snap = await tx.get(ref);
+      if (!snap.exists || snap.data()?.posyanduId !== auth.posyanduId) throw new Error("NOT_FOUND");
+      tx.delete(ref);
+      await writeAuditLog({ actorUserId: auth.uid, action: "DELETE_ADMINISTRATIVE_RECORD",
+        resourceType: "administrative_record", resourceId: id, beforeSnapshot: snap.data() || null,
+        afterSnapshot: null, reason: "Penghapusan catatan administrasi oleh administrator",
+        posyanduId: auth.posyanduId }, tx);
+    });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    return NextResponse.json({ error: code === "NOT_FOUND" ? "Catatan tidak ditemukan." : "Catatan gagal dihapus." },
+      { status: code === "NOT_FOUND" ? 404 : 500 });
+  }
+}

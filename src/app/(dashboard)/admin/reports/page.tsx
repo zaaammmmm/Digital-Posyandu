@@ -28,9 +28,15 @@ export default async function ReportsPage() {
             <input id="to" name="to" type="date" required defaultValue={today} className="posyandu-input" />
           </div>
         </div>
-        <button type="submit" className="inline-flex items-center justify-center rounded-[10px] bg-[#176f4f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#105b40]">
-          Unduh Rekapitulasi (CSV)
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="submit" className="inline-flex items-center justify-center rounded-[10px] bg-[#176f4f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#105b40]">
+            Unduh Rekapitulasi (CSV)
+          </button>
+          <button type="submit" formAction="/admin/reports/print" formTarget="_blank"
+            className="inline-flex items-center justify-center rounded-[10px] border border-emerald-700 px-4 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">
+            Pratinjau / Simpan PDF
+          </button>
+        </div>
       </form>
     </div>
   );

@@ -2,7 +2,8 @@ import React from "react";
 import { adminDb } from "@/lib/firebase/admin";
 import { rowsOf } from "@/lib/data/rows";
 import { requirePageContext } from "@/lib/auth/page-context";
-import { AdministrativeRecordForm, RECORD_TYPE_LABEL } from "@/components/forms/AdministrativeRecordForm";
+import { AdministrativeRecordForm } from "@/components/forms/AdministrativeRecordForm";
+import { AdministrativeRecordRow } from "@/components/forms/AdministrativeRecordRow";
 
 export default async function AdministrationPage() {
   const ctx = await requirePageContext(["cadre", "health_worker", "posyandu_admin"]);
@@ -32,18 +33,16 @@ export default async function AdministrationPage() {
               <th className="posyandu-th">Jenis</th>
               <th className="posyandu-th">Judul</th>
               <th className="posyandu-th">Keterangan</th>
+              {(ctx.role === "cadre" || ctx.role === "posyandu_admin") && <th className="posyandu-th">Aksi</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {records.length === 0 && <tr><td className="posyandu-td text-slate-500" colSpan={4}>Belum ada catatan administrasi.</td></tr>}
-            {records.map(r => (
-              <tr key={r.id}>
-                <td className="posyandu-td font-mono text-xs whitespace-nowrap">{String(r.recordDate)}</td>
-                <td className="posyandu-td">{RECORD_TYPE_LABEL[String(r.type)] || String(r.type)}</td>
-                <td className="posyandu-td font-semibold text-slate-900">{String(r.title)}</td>
-                <td className="posyandu-td text-slate-600">{String(r.description || "-")}</td>
-              </tr>
-            ))}
+            {records.length === 0 && <tr><td className="posyandu-td text-slate-500" colSpan={ctx.role === "cadre" || ctx.role === "posyandu_admin" ? 5 : 4}>Belum ada catatan administrasi.</td></tr>}
+            {records.map(r => <AdministrativeRecordRow key={r.id}
+              record={{ id: String(r.id), type: String(r.type), title: String(r.title),
+                recordDate: String(r.recordDate), description: String(r.description || "") }}
+              canEdit={ctx.role === "cadre" || ctx.role === "posyandu_admin"}
+              canDelete={ctx.role === "posyandu_admin"} />)}
           </tbody>
         </table>
       </div>

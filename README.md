@@ -15,7 +15,11 @@ Aplikasi berbasis Next.js untuk mendukung operasional Posyandu: pengelolaan anak
 - Catatan imunisasi, suplemen, dan rekap laporan
 - Ringkasan kunjungan berbasis Gemini dengan payload minimum dan safety check
 - Tampilan responsif dengan sidebar desktop dan navigasi mobile
-- Penyimpanan draft kunjungan untuk mendukung penggunaan offline
+- Penyimpanan draft kunjungan terenkripsi di perangkat dan pemulihan selama sesi browser
+- Pusat notifikasi operasional berbasis role
+- Pemeriksaan kandidat data anak duplikat
+- Pembaruan/penghapusan catatan administrasi dengan audit trail
+- Rekap agregat siap cetak / simpan sebagai PDF
 
 ## Peran
 
@@ -219,6 +223,8 @@ npm run emulators
 ```
 
 Rules menolak seluruh direct client writes pada data operasional/klinis; mutasi harus melalui API server yang memverifikasi ID token, membership, tenant, role, dan audit. Catatan: Admin SDK melewati Firestore Rules, sehingga pemeriksaan otorisasi pada setiap API route tetap wajib. Indexes mengikuti query yang ditemukan pada repository dan dapat meminta index tambahan jika query baru ditambahkan.
+
+Rincian implementasi operasional Tahap 3 tersedia pada [`docs/PHASE-3-OPERATIONAL-COMPLETENESS.md`](docs/PHASE-3-OPERATIONAL-COMPLETENESS.md).
 
 Detail mapping entitas PRD ke collection, field minimum, dan batasan seed tersedia pada [`docs/FIRESTORE-COLLECTION-CATALOG.md`](docs/FIRESTORE-COLLECTION-CATALOG.md).
 

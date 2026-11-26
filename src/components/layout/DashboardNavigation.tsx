@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity, Baby, BookOpen, ClipboardList, FileBarChart2, FileText,
+  Activity, Baby, Bell, BookOpen, ClipboardList, FileBarChart2, FileText,
   Building2, ClipboardCheck, HeartPulse, LayoutDashboard, Menu, Plus, ShieldCheck, UsersRound, X,
 } from "lucide-react";
 
@@ -22,6 +22,7 @@ const sections: { title: string; items: NavigationItem[] }[] = [
   {
     title: "Ruang kerja",
     items: [
+      { label: "Notifikasi", href: "/notifications", icon: Bell, match: "/notifications", roles: ["cadre", "health_worker", "posyandu_admin", "content_reviewer", "system_admin"] },
       { label: "Dashboard kader", href: "/cadre", icon: LayoutDashboard, match: "/cadre", roles: ["cadre"] },
       { label: "Data anak", href: "/cadre/children", icon: Baby, match: "/cadre/children", roles: ["cadre", "posyandu_admin"] },
       { label: "Tindak lanjut", href: "/cadre/followups", icon: ClipboardCheck, roles: ["cadre"] },

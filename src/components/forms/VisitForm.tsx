@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { getOfflineDraft, removeOfflineDraft, saveOfflineDraft } from "@/lib/offline/draft-storage";
 import { Button } from "../ui/Button";
 
 export const VisitForm: React.FC<{ childId: string; posyanduId: string }> = ({
@@ -17,6 +18,43 @@ export const VisitForm: React.FC<{ childId: string; posyanduId: string }> = ({
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [isError, setIsError] = useState(false);
+  const [offlineReady, setOfflineReady] = useState(false);
+  const [draftStatus, setDraftStatus] = useState("");
+
+  const draftId = `visit:${childId}`;
+  useEffect(() => {
+    let active = true;
+    getOfflineDraft<{
+      weightKg: string; lengthHeightCm: string; measurementType: "recumbent_length" | "standing_height";
+      headCircumferenceCm: string; muacCm: string; measurementMethod: string; equipmentId: string;
+    }>(draftId).then(draft => {
+      if (!active) return;
+      if (draft) {
+        setWeightKg(draft.weightKg || "");
+        setLengthHeightCm(draft.lengthHeightCm || "");
+        setMeasurementType(draft.measurementType || "standing_height");
+        setHeadCircumferenceCm(draft.headCircumferenceCm || "");
+        setMuacCm(draft.muacCm || "");
+        setMeasurementMethod(draft.measurementMethod || "");
+        setEquipmentId(draft.equipmentId || "");
+        setDraftStatus("Draft lokal dipulihkan dari perangkat ini.");
+      }
+    }).catch(() => { if (active) setDraftStatus("Draft lokal tidak dapat dibuka; silakan periksa sesi browser."); })
+      .finally(() => { if (active) setOfflineReady(true); });
+    return () => { active = false; };
+  }, [draftId]);
+
+  useEffect(() => {
+    if (!offlineReady) return;
+    const hasContent = [weightKg, lengthHeightCm, headCircumferenceCm, muacCm, measurementMethod, equipmentId].some(v => v.trim());
+    if (!hasContent) return;
+    const timer = window.setTimeout(() => {
+      saveOfflineDraft(draftId, { weightKg, lengthHeightCm, measurementType, headCircumferenceCm, muacCm, measurementMethod, equipmentId })
+        .then(() => setDraftStatus("Draft tersimpan terenkripsi di perangkat ini."))
+        .catch(() => setDraftStatus("Penyimpanan offline tidak tersedia pada browser ini."));
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [offlineReady, draftId, weightKg, lengthHeightCm, measurementType, headCircumferenceCm, muacCm, measurementMethod, equipmentId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +93,8 @@ export const VisitForm: React.FC<{ childId: string; posyanduId: string }> = ({
         setMuacCm("");
         setMeasurementMethod("");
         setEquipmentId("");
+        await removeOfflineDraft(draftId);
+        setDraftStatus("Draft lokal dihapus setelah kunjungan berhasil dikirim.");
       } else {
         setIsError(true);
         setMsg(`Error: ${data.error}`);
@@ -69,6 +109,7 @@ export const VisitForm: React.FC<{ childId: string; posyanduId: string }> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 posyandu-card p-5 sm:p-6">
+      {draftStatus && <p role="status" className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{draftStatus}</p>}
       <div className="border-b border-slate-100 pb-3">
         <h3 className="font-semibold text-slate-900 text-base">Form Pencatatan Kunjungan</h3>
         <p className="text-xs text-slate-500 mt-0.5">

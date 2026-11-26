@@ -37,7 +37,7 @@ export default async function ChildrenListPage({ searchParams }: { searchParams:
           <p className="posyandu-page-subtitle">Pilih data anak untuk mencatat kunjungan baru</p>
         </div>
         {canRegister && (
-          <Link href="/cadre/children/new" className="text-sm font-semibold text-emerald-700 hover:underline">+ Daftarkan Anak</Link>
+          <div className="flex flex-wrap gap-3"><Link href="/cadre/children/duplicates" className="text-sm font-semibold text-slate-700 hover:underline">Periksa duplikat</Link><Link href="/cadre/children/new" className="text-sm font-semibold text-emerald-700 hover:underline">+ Daftarkan Anak</Link></div>
         )}
       </div>
       <form method="get" role="search" className="flex gap-2">
