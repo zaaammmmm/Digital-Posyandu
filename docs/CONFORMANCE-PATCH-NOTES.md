@@ -39,3 +39,8 @@ persetujuan tenaga kesehatan, atau penilaian privasi.
 - Immunization and vitamin records created by cadre now go through `POST /api/immunizations/{id}/review` and `/api/supplements/{id}/review` (health_worker only, reason required for rejection, audited). Guardians only see verified records.
 - Bidan correction screen at `/health-worker/verifications/{visitId}/correct`; a correction closes accepted guardian requests for that visit (`status: corrected`).
 - Reviewers can submit new knowledge documents (source URL must be http/https); the cadre guide page lists approved documents with search and source/version metadata.
+
+## Cadre follow-up and guardian privacy patch
+
+- Cadre follow-up page (`/cadre/followups`) lists visits returned for correction and rejected immunization/vitamin records with the health worker's reason; the dashboard counter now matches it. Children list has name/registration-number search.
+- Guardian privacy page (`/parent/children/{id}/privacy`) records grant/withdraw for the `ai_summary` purpose. Withdrawal stops new AI summaries (verify + generate APIs) and hides existing ones from the guardian. With no record the previous behaviour (summaries allowed) is kept. The notice text/version (`draft-1`) is a placeholder that needs legal review before production.

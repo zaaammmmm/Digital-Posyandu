@@ -19,10 +19,12 @@ function ageLabel(dateOfBirth: string) {
   }
 }
 
-export default async function ChildrenListPage() {
+export default async function ChildrenListPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const ctx = await requirePageContext(["cadre", "health_worker", "posyandu_admin"]);
   const snap = await adminDb.collection("children").where("posyanduId", "==", ctx.posyanduId).limit(200).get();
+  const q = ((await searchParams).q || "").trim().toLowerCase().slice(0, 100);
   const children = rowsOf(snap)
+    .filter(c => !q || String(c.fullName).toLowerCase().includes(q) || String(c.registrationNumber).toLowerCase().includes(q))
     .sort((a, b) => String(a.registrationNumber).localeCompare(String(b.registrationNumber)));
   const canRegister = ctx.role === "cadre" || ctx.role === "posyandu_admin";
   const canRecord = ctx.role === "cadre" || ctx.role === "health_worker";
@@ -38,6 +40,10 @@ export default async function ChildrenListPage() {
           <Link href="/cadre/children/new" className="text-sm font-semibold text-emerald-700 hover:underline">+ Daftarkan Anak</Link>
         )}
       </div>
+      <form method="get" role="search" className="flex gap-2">
+        <input name="q" defaultValue={q} aria-label="Cari anak" placeholder="Cari nama atau nomor registrasi" className="posyandu-input" />
+        <button type="submit" className="rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-emerald-50">Cari</button>
+      </form>
       <div className="posyandu-table-wrap">
         <table className="posyandu-table">
           <thead className="posyandu-thead">
@@ -51,7 +57,7 @@ export default async function ChildrenListPage() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {children.length === 0 && (
-              <tr><td className="posyandu-td text-slate-500" colSpan={5}>Belum ada anak terdaftar pada Posyandu ini.</td></tr>
+              <tr><td className="posyandu-td text-slate-500" colSpan={5}>{q ? "Tidak ada anak yang cocok dengan pencarian." : "Belum ada anak terdaftar pada Posyandu ini."}</td></tr>
             )}
             {children.map(c => (
               <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">

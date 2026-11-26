@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { generateSafeSummary } from "@/lib/ai/summary-generator";
 import { buildSafeAiPayload } from "@/lib/ai/payload-builder";
 import { requireAuth, isAuthError } from "@/lib/auth/server";
+import { isAiSummaryAllowed } from "@/lib/data/consent";
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, ["health_worker"]);
@@ -15,6 +16,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Ringkasan hanya dapat dibuat dari kunjungan terverifikasi pada tenant aktif" }, { status: 403 });
     }
     const visit = visitSnap.data()!;
+    if (!(await isAiSummaryAllowed(auth.posyanduId, String(visit.childId)))) {
+      return NextResponse.json({ error: "Wali tidak memberi persetujuan untuk ringkasan otomatis" }, { status: 403 });
+    }
     const measurementSnap = await adminDb.collection("anthropometry_measurements")
       .where("visitId", "==", visitId).get();
     const activeVerifiedMeasurement = measurementSnap.docs

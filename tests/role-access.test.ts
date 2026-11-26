@@ -87,3 +87,16 @@ test("knowledge submissions only accept http(s) source links, and guides show ap
   assert.match(read("../src/app/api/knowledge/route.ts"), /protocol === "https:" \|\| u\.protocol === "http:"/);
   assert.match(read("../src/app/(dashboard)/cadre/guides/page.tsx"), /where\("status", "==", "approved"\)/);
 });
+
+test("guardian consent for AI summaries is enforced on generation and hidden when withdrawn", () => {
+  assert.match(read("../src/lib/data/consent.ts"), /consentStatus === "granted"/);
+  assert.match(read("../src/app/api/visits/[visitId]/verify/route.ts"), /isAiSummaryAllowed/);
+  assert.match(read("../src/app/api/ai/summary/generate/route.ts"), /isAiSummaryAllowed/);
+  assert.match(read("../src/app/(dashboard)/parent/children/[childId]/page.tsx"), /summary && summaryAllowed/);
+  assert.match(read("../src/app/(dashboard)/parent/children/[childId]/privacy/page.tsx"), /requirePageContext\(\["parent"\]\)/);
+});
+
+test("cadre follow-up page is cadre-only and listed only in the cadre menu", () => {
+  assert.match(read("../src/app/(dashboard)/cadre/followups/page.tsx"), /requirePageContext\(\["cadre"\]\)/);
+  assert.match(read("../src/components/layout/DashboardNavigation.tsx"), /href: "\/cadre\/followups"[^\n]*roles: \["cadre"\]/);
+});

@@ -7,6 +7,7 @@ import { retrieveApprovedKnowledge } from "@/lib/ai/knowledge-base";
 import { writeAuditLog } from "@/lib/audit/audit-logger";
 import { requireAuth, isAuthError } from "@/lib/auth/server";
 import { validateSummaryProvenance } from "@/lib/ai/summary-provenance";
+import { isAiSummaryAllowed } from "@/lib/data/consent";
 
 export async function POST(req: NextRequest, context: { params: Promise<{ visitId: string }> }) {
   const auth = await requireAuth(req, ["health_worker"]);
@@ -43,6 +44,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ visitI
     });
     await writeAuditLog({ actorUserId: auth.uid, action: "VERIFY_VISIT", resourceType: "visit",
       resourceId: visitId, beforeSnapshot: visit, afterSnapshot: { verificationStatus: "verified", verifiedBy: auth.uid, version: nextVersion }, reason: "Verifikasi oleh petugas berwenang", posyanduId: auth.posyanduId });
+
+    if (!(await isAiSummaryAllowed(auth.posyanduId, String(visit.childId)))) {
+      return NextResponse.json({ success: true, visitId, summaryId: null, knowledgeSources: 0,
+        message: "Kunjungan diverifikasi. Ringkasan otomatis tidak dibuat karena wali tidak memberi persetujuan." });
+    }
 
     // Previous verified, non-superseded measurement of the same child (numeric comparison only).
     const prevSnap = await adminDb.collection("anthropometry_measurements")

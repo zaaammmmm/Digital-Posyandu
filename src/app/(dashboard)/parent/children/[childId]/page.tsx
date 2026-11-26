@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminDb } from "@/lib/firebase/admin";
 import { rowsOf } from "@/lib/data/rows";
@@ -8,6 +9,7 @@ import { todayInJakarta } from "@/lib/data/child-lookup";
 import { GrowthChart } from "@/components/charts/GrowthChart";
 import { VisitSummaryCard } from "@/components/ai/VisitSummaryCard";
 import { CorrectionRequestButton } from "@/components/forms/CorrectionRequestButton";
+import { isAiSummaryAllowed } from "@/lib/data/consent";
 import { getApprovedUpcomingRules, ApprovedScheduleRule } from "@/lib/schedule/approved-catalog";
 
 const REQUEST_LABEL: Record<string, string> = {
@@ -38,6 +40,7 @@ export default async function ChildDetailPage({ params }: { params: Promise<{ ch
     adminDb.collection("immunization_schedule_rules").where("status", "==", "approved").limit(200).get(),
   ]);
 
+  const summaryAllowed = await isAiSummaryAllowed(ctx.posyanduId, childId);
   const measurements = measSnap.docs.map(d => d.data()).filter(m => !m.supersededAt);
   const measurementByVisit = new Map(measurements.map(m => [String(m.visitId), m]));
   const verifiedVisits = rowsOf(visitSnap)
@@ -79,12 +82,14 @@ export default async function ChildDetailPage({ params }: { params: Promise<{ ch
         </div>
       </div>
 
-      {summary ? (
+      {summary && summaryAllowed ? (
         <VisitSummaryCard summaryText={String(summary.generatedText)} sourceDoc={sourceDoc}
           generatedAt={String(summary.generatedAt)} safetyStatus={String(summary.safetyStatus)} />
       ) : (
-        <div className="posyandu-card p-5 text-sm text-slate-600">Ringkasan tersedia setelah kunjungan disahkan petugas.</div>
+        <div className="posyandu-card p-5 text-sm text-slate-600">{summaryAllowed ? "Ringkasan tersedia setelah kunjungan disahkan petugas." : "Ringkasan otomatis tidak ditampilkan karena persetujuan tidak diberikan."}</div>
       )}
+
+      <Link href={`/parent/children/${childId}/privacy`} className="inline-block text-xs font-semibold text-emerald-700 hover:underline">Privasi &amp; persetujuan</Link>
 
       <GrowthChart data={chartData} />
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity, Baby, BookOpen, ClipboardList, FileBarChart2, FileText,
-  Building2, HeartPulse, LayoutDashboard, Menu, ShieldCheck, UsersRound, X,
+  Building2, ClipboardCheck, HeartPulse, LayoutDashboard, Menu, ShieldCheck, UsersRound, X,
 } from "lucide-react";
 
 export type NavRole = "parent" | "cadre" | "health_worker" | "posyandu_admin" | "content_reviewer" | "system_admin";
@@ -24,6 +24,7 @@ const sections: { title: string; items: NavigationItem[] }[] = [
     items: [
       { label: "Dashboard kader", href: "/cadre", icon: LayoutDashboard, match: "/cadre", roles: ["cadre"] },
       { label: "Data anak", href: "/cadre/children", icon: Baby, match: "/cadre/children", roles: ["cadre", "posyandu_admin"] },
+      { label: "Tindak lanjut", href: "/cadre/followups", icon: ClipboardCheck, roles: ["cadre"] },
       { label: "Administrasi", href: "/cadre/administration", icon: ClipboardList, roles: ["cadre", "health_worker", "posyandu_admin"] },
       { label: "Panduan kader", href: "/cadre/guides", icon: BookOpen, roles: ["cadre", "health_worker"] },
     ],
