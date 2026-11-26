@@ -1,4 +1,5 @@
 import React from "react";
+import { ShieldCheck, Sparkles } from "lucide-react";
 
 interface VisitSummaryCardProps {
   summaryText: string;
@@ -13,26 +14,31 @@ export const VisitSummaryCard: React.FC<VisitSummaryCardProps> = ({
   generatedAt,
   safetyStatus,
 }) => {
+  const validated = safetyStatus === "passed";
   return (
-    <section className="posyandu-card space-y-4 p-5 sm:p-6" aria-labelledby="visit-summary-title">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-[11px] font-bold uppercase tracking-[.12em] text-emerald-700">Ringkasan kesehatan</p>
-          <h2 id="visit-summary-title" className="text-base font-bold tracking-tight text-slate-900 sm:text-lg">
-            Pemantauan Tumbuh Kembang
-          </h2>
-        </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" aria-hidden="true" />
-          {safetyStatus === "passed" ? "Tervalidasi" : "Template Baku"}
-        </span>
+    <section className="ai-card space-y-4 p-5 sm:p-6" aria-labelledby="visit-summary-title">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="visit-summary-title" className="text-base font-semibold text-slate-900 sm:text-lg tracking-tight">
+          AI Summary
+        </h2>
+        {validated ? (
+          <span className="ai-pill">
+            <ShieldCheck size={13} aria-hidden="true" />
+            Rekomendasi AI
+            <span className="sr-only">, sudah divalidasi</span>
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-full border border-[#a7f3d0] bg-white px-3 py-1 text-xs font-medium text-[#047857]">
+            Template baku
+          </span>
+        )}
       </div>
-      <p className="text-sm leading-7 text-slate-700">{summaryText}</p>
-      <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-        <span>Sumber edukasi: <strong className="font-semibold text-slate-700">{sourceDoc || "Tidak ada materi edukasi terlampir"}</strong></span>
-        <span>Diperbarui: {new Date(generatedAt).toLocaleDateString("id-ID")}</span>
+      <p className="text-sm leading-relaxed text-[#0f172a]">{summaryText}</p>
+      <div className="flex flex-col gap-1 border-t border-[#a7f3d0] pt-3 text-[13px] text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+        <span>Sumber edukasi: <strong className="font-medium text-slate-800">{sourceDoc || "Tidak ada materi edukasi terlampir"}</strong></span>
+        <span>Diperbarui {new Date(generatedAt).toLocaleDateString("id-ID")}</span>
       </div>
-      <div className="rounded-xl bg-slate-50 px-3.5 py-3 text-xs leading-relaxed text-slate-600">
+      <div className="rounded-[10px] border border-[#a7f3d0] bg-white px-3.5 py-3 text-[13px] leading-relaxed text-slate-600">
         <strong className="font-semibold text-slate-800">Catatan penting. </strong>
         Ringkasan ini merupakan informasi pemantauan rutin, bukan pengganti diagnosis atau konsultasi dengan tenaga kesehatan.
       </div>

@@ -41,7 +41,7 @@ export default function NewChildPage() {
   return (
     <div className="max-w-lg mx-auto posyandu-card p-6 sm:p-7 space-y-5">
       <div className="border-b border-slate-100 pb-3">
-        <h2 className="text-lg font-bold text-slate-900">Registrasi Anak & Wali Baru</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Registrasi Anak & Wali Baru</h2>
         <p className="text-xs text-slate-500 mt-0.5">
           Lengkapi identitas dasar sasaran dan wali pendamping
         </p>
@@ -99,7 +99,7 @@ export default function NewChildPage() {
           />
           <p className="mt-1 text-xs text-slate-500">Nama dan kontak wali tidak disimpan pada tahap ini (minimisasi data).</p>
         </div>
-        {error && <p role="alert" className="text-xs font-medium text-rose-800 bg-rose-50 border border-rose-200 px-3.5 py-2.5 rounded-xl">{error}</p>}
+        {error && <p role="alert" className="text-xs font-medium text-rose-800 bg-rose-50 border border-rose-200 px-3.5 py-2.5 rounded-[10px]">{error}</p>}
         <Button type="submit" disabled={loading} className="w-full mt-2">
           {loading ? "Menyimpan..." : "Daftarkan Anak"}
         </Button>

@@ -44,7 +44,7 @@ export const ServiceEventForm: React.FC<{ childId: string }> = ({ childId }) => 
   return (
     <form onSubmit={submit} className="space-y-4 posyandu-card p-5 sm:p-6">
       <div className="border-b border-slate-100 pb-3">
-        <h3 className="font-bold text-slate-900 text-base">Catat Imunisasi / Vitamin</h3>
+        <h3 className="font-semibold text-slate-900 text-base">Catat Imunisasi / Vitamin</h3>
         <p className="text-xs text-slate-500 mt-0.5">Catatan baru berstatus menunggu verifikasi petugas kesehatan.</p>
       </div>
       <div>
@@ -74,7 +74,7 @@ export const ServiceEventForm: React.FC<{ childId: string }> = ({ childId }) => 
         <input id="svc-notes" className="posyandu-input" value={notes} onChange={e => setNotes(e.target.value)} />
       </div>
       {message && (
-        <p role={isError ? "alert" : "status"} className={`rounded-xl border px-3.5 py-2.5 text-xs font-medium ${isError
+        <p role={isError ? "alert" : "status"} className={`rounded-[10px] border px-3.5 py-2.5 text-xs font-medium ${isError
           ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{message}</p>
       )}
       <Button type="submit" disabled={loading} className="w-full">{loading ? "Menyimpan..." : "Simpan"}</Button>

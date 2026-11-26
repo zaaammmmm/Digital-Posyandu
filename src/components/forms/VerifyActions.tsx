@@ -40,7 +40,7 @@ export const VerifyActions: React.FC<{ visitId: string }> = ({ visitId }) => {
   return (
     <div className="space-y-3">
       {message && (
-        <p role={isError ? "alert" : "status"} className={`rounded-xl border px-3.5 py-2.5 text-xs font-medium ${isError
+        <p role={isError ? "alert" : "status"} className={`rounded-[10px] border px-3.5 py-2.5 text-xs font-medium ${isError
           ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
           {message}
         </p>

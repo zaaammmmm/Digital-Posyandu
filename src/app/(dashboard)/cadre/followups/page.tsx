@@ -29,7 +29,7 @@ export default async function FollowUpPage() {
         </div>
       </div>
       <section className="posyandu-card p-5 space-y-3">
-        <h3 className="font-bold text-sm text-slate-900">Kunjungan dikembalikan ({visits.length})</h3>
+        <h3 className="font-semibold text-sm text-slate-900">Kunjungan dikembalikan ({visits.length})</h3>
         {visits.length === 0 && <p className="text-sm text-slate-600">Tidak ada kunjungan yang perlu ditindaklanjuti.</p>}
         {visits.map(v => (
           <div key={v.id} className="border-t border-slate-100 pt-3 space-y-1">
@@ -40,7 +40,7 @@ export default async function FollowUpPage() {
         ))}
       </section>
       <section className="posyandu-card p-5 space-y-3">
-        <h3 className="font-bold text-sm text-slate-900">Imunisasi &amp; vitamin ditolak ({services.length})</h3>
+        <h3 className="font-semibold text-sm text-slate-900">Imunisasi &amp; vitamin ditolak ({services.length})</h3>
         {services.length === 0 && <p className="text-sm text-slate-600">Tidak ada catatan layanan yang ditolak.</p>}
         {services.map(s => (
           <div key={s.id} className="border-t border-slate-100 pt-3 space-y-1">

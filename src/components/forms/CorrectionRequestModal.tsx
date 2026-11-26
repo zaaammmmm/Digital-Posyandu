@@ -38,9 +38,9 @@ export const CorrectionRequestModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md space-y-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xl shadow-slate-950/15 sm:p-6">
+      <div className="w-full max-w-md space-y-5 rounded-[14px] border border-slate-200/80 bg-white p-5 shadow-2xl shadow-slate-950/15 sm:p-6">
         <div className="space-y-1.5 border-b border-slate-100 pb-4">
-          <h3 className="text-base font-bold tracking-tight text-slate-900">Ajukan Koreksi Catatan</h3>
+          <h3 className="text-base font-semibold  text-slate-900">Ajukan Koreksi Catatan</h3>
           <p className="text-sm leading-relaxed text-slate-500">
             Catatan yang telah diverifikasi tidak dapat diubah langsung. Ajukan koreksi beserta alasan yang jelas.
           </p>
@@ -56,12 +56,12 @@ export const CorrectionRequestModal: React.FC<{
           />
         </div>
         {error && (
-          <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm font-medium text-rose-800">
+          <p role="alert" className="rounded-[10px] border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm font-medium text-rose-800">
             {error}
           </p>
         )}
         {status && (
-          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm font-medium text-emerald-800">
+          <p className="rounded-[10px] border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm font-medium text-emerald-800">
             {status}
           </p>
         )}

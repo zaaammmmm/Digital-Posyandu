@@ -69,7 +69,7 @@ export const MeasurementCorrectionForm: React.FC<Props> = ({ visitId, initial })
         <textarea id="cor-reason" rows={3} required minLength={5} maxLength={2000} className="posyandu-input" value={reason} onChange={e => setReason(e.target.value)} />
       </div>
       {message && (
-        <p role={isError ? "alert" : "status"} className={`rounded-xl border px-3.5 py-2.5 text-xs font-medium ${isError
+        <p role={isError ? "alert" : "status"} className={`rounded-[10px] border px-3.5 py-2.5 text-xs font-medium ${isError
           ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{message}</p>
       )}
       <Button type="submit" disabled={loading || reason.trim().length < 5} className="w-full">{loading ? "Menyimpan..." : "Simpan koreksi"}</Button>

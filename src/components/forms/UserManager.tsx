@@ -62,7 +62,7 @@ export const UserManager: React.FC<{ users: ManagedUser[]; selfUid: string }> = 
   return (
     <div className="space-y-5">
       <form onSubmit={createUser} className="posyandu-card p-5 sm:p-6 space-y-4">
-        <h3 className="font-bold text-sm sm:text-base text-slate-900">Tambah pengguna</h3>
+        <h3 className="font-semibold text-sm sm:text-base text-slate-900">Tambah pengguna</h3>
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
           <div>
             <label className="posyandu-label" htmlFor="u-email">Email</label>
@@ -85,7 +85,7 @@ export const UserManager: React.FC<{ users: ManagedUser[]; selfUid: string }> = 
           </div>
         </div>
         {message && (
-          <p role={isError ? "alert" : "status"} className={`rounded-xl border px-3.5 py-2.5 text-xs font-medium ${isError
+          <p role={isError ? "alert" : "status"} className={`rounded-[10px] border px-3.5 py-2.5 text-xs font-medium ${isError
             ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{message}</p>
         )}
         <Button type="submit" disabled={busy}>{busy ? "Memproses..." : "Buat akun"}</Button>

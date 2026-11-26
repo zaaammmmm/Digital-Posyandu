@@ -17,7 +17,7 @@ export default async function ReportsPage() {
         </div>
       </div>
       <form method="GET" action="/api/reports/export" className="posyandu-card p-5 sm:p-6 space-y-4">
-        <h4 className="font-bold text-sm sm:text-base text-slate-900">Pilih periode rekap</h4>
+        <h4 className="font-semibold text-sm sm:text-base text-slate-900">Pilih periode rekap</h4>
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
           <div>
             <label className="posyandu-label" htmlFor="from">Dari tanggal</label>
@@ -28,7 +28,7 @@ export default async function ReportsPage() {
             <input id="to" name="to" type="date" required defaultValue={today} className="posyandu-input" />
           </div>
         </div>
-        <button type="submit" className="inline-flex items-center justify-center rounded-xl bg-[#176f4f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#105b40]">
+        <button type="submit" className="inline-flex items-center justify-center rounded-[10px] bg-[#176f4f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#105b40]">
           Unduh Rekapitulasi (CSV)
         </button>
       </form>

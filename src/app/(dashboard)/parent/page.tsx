@@ -20,8 +20,8 @@ export default async function ParentDashboard() {
     <div className="space-y-6">
       <div className="posyandu-page-header"><div><h1 className="posyandu-page-title">Catatan Pertumbuhan Anak</h1><p className="posyandu-page-subtitle">Data anak dan pengukuran terverifikasi pada Posyandu aktif.</p></div></div>
       {children.length === 0 ? <div className="posyandu-card p-5 text-sm text-slate-600">Belum ada profil anak yang terhubung dengan akun wali ini.</div> : <>
-        <div className="posyandu-card p-5"><h2 className="font-bold text-slate-900">{selected!.data().fullName}</h2><p className="mt-1 text-sm text-slate-500">Nomor registrasi: {selected!.data().registrationNumber}</p><p className="mt-1 text-sm text-slate-500">Tanggal lahir: {selected!.data().dateOfBirth}</p></div>
-        <div className="posyandu-card p-5 space-y-2"><h3 className="font-bold text-sm text-slate-900">Profil dan riwayat lengkap</h3><ul className="space-y-1 text-sm">{children.map(c => <li key={c.id}><Link className="font-semibold text-emerald-700 hover:underline" href={`/parent/children/${c.id}`}>{String(c.data().fullName)}</Link></li>)}</ul></div>
+        <div className="posyandu-card p-5"><h2 className="font-semibold text-slate-900">{selected!.data().fullName}</h2><p className="mt-1 text-sm text-slate-500">Nomor registrasi: {selected!.data().registrationNumber}</p><p className="mt-1 text-sm text-slate-500">Tanggal lahir: {selected!.data().dateOfBirth}</p></div>
+        <div className="posyandu-card p-5 space-y-2"><h3 className="font-semibold text-sm text-slate-900">Profil dan riwayat lengkap</h3><ul className="space-y-1 text-sm">{children.map(c => <li key={c.id}><Link className="font-semibold text-emerald-700 hover:underline" href={`/parent/children/${c.id}`}>{String(c.data().fullName)}</Link></li>)}</ul></div>
         <GrowthChart data={chartData} />
       </>}
     </div>

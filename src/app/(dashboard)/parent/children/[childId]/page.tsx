@@ -94,7 +94,7 @@ export default async function ChildDetailPage({ params }: { params: Promise<{ ch
       <GrowthChart data={chartData} />
 
       <section className="posyandu-card p-5 space-y-3">
-        <h3 className="font-bold text-sm text-slate-900">Riwayat Kunjungan Terverifikasi</h3>
+        <h3 className="font-semibold text-sm text-slate-900">Riwayat Kunjungan Terverifikasi</h3>
         {verifiedVisits.length === 0 && <p className="text-sm text-slate-600">Belum ada kunjungan terverifikasi.</p>}
         {verifiedVisits.map(v => {
           const m = measurementByVisit.get(v.id);
@@ -102,7 +102,7 @@ export default async function ChildDetailPage({ params }: { params: Promise<{ ch
           return (
             <div key={v.id} className="flex flex-col gap-3 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
-                <p className="text-sm font-bold text-slate-900">Kunjungan {String(v.visitDate)}</p>
+                <p className="text-sm font-semibold text-slate-900">Kunjungan {String(v.visitDate)}</p>
                 <p className="text-xs text-slate-600">
                   {m ? <>BB: <strong>{String(m.weightKg)} kg</strong> &bull; TB/PB: <strong>{String(m.lengthHeightCm)} cm</strong></> : "Pengukuran tidak tersedia"}
                   {" "}&bull; <span className="font-semibold text-emerald-700">Terverifikasi</span>
@@ -116,7 +116,7 @@ export default async function ChildDetailPage({ params }: { params: Promise<{ ch
       </section>
 
       <section className="posyandu-card p-5 space-y-3">
-        <h3 className="font-bold text-sm text-slate-900">Imunisasi &amp; Jadwal</h3>
+        <h3 className="font-semibold text-sm text-slate-900">Imunisasi &amp; Jadwal</h3>
         <p className="text-xs text-slate-500">Status &ldquo;belum tercatat&rdquo; tidak berarti belum diberikan. Konfirmasikan dengan Posyandu atau Puskesmas.</p>
         {immunizations.length === 0 ? <p className="text-sm text-slate-600">Belum ada imunisasi terverifikasi pada aplikasi ini.</p> : (
           <ul className="space-y-1 text-sm text-slate-800">
@@ -125,14 +125,14 @@ export default async function ChildDetailPage({ params }: { params: Promise<{ ch
         )}
         {supplements.length > 0 && (
           <div className="space-y-1">
-            <h4 className="text-xs font-bold text-slate-700">Vitamin &amp; suplemen terverifikasi</h4>
+            <h4 className="text-xs font-semibold text-slate-700">Vitamin &amp; suplemen terverifikasi</h4>
             <ul className="space-y-1 text-sm text-slate-800">
               {supplements.map(s => <li key={s.id}>{String(s.administrationDate)} &mdash; {String(s.supplementType)}</li>)}
             </ul>
           </div>
         )}
         {upcoming.length === 0 ? (
-          <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+          <p className="rounded-[10px] bg-slate-50 p-3 text-sm text-slate-600">
             Jadwal imunisasi belum tersedia karena katalog resmi belum disahkan. Konfirmasikan jadwal dengan Posyandu/Puskesmas.
           </p>
         ) : (

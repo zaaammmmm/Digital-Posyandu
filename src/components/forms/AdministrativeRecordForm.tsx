@@ -49,7 +49,7 @@ export const AdministrativeRecordForm: React.FC = () => {
 
   return (
     <form onSubmit={submit} className="posyandu-card p-5 space-y-3">
-      <h3 className="font-bold text-sm text-slate-900">Tambah catatan</h3>
+      <h3 className="font-semibold text-sm text-slate-900">Tambah catatan</h3>
       <div className="grid sm:grid-cols-2 gap-3">
         <div>
           <label className="posyandu-label" htmlFor="rec-type">Jenis</label>
@@ -71,7 +71,7 @@ export const AdministrativeRecordForm: React.FC = () => {
         <textarea id="rec-desc" rows={3} maxLength={4000} className="posyandu-input" value={description} onChange={e => setDescription(e.target.value)} />
       </div>
       {message && (
-        <p role={isError ? "alert" : "status"} className={`rounded-xl border px-3.5 py-2.5 text-xs font-medium ${isError
+        <p role={isError ? "alert" : "status"} className={`rounded-[10px] border px-3.5 py-2.5 text-xs font-medium ${isError
           ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{message}</p>
       )}
       <Button type="submit" disabled={loading}>{loading ? "Menyimpan..." : "Simpan catatan"}</Button>

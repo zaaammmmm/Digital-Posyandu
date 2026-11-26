@@ -70,7 +70,7 @@ export const VisitForm: React.FC<{ childId: string; posyanduId: string }> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-4 posyandu-card p-5 sm:p-6">
       <div className="border-b border-slate-100 pb-3">
-        <h3 className="font-bold text-slate-900 text-base">Form Pencatatan Kunjungan</h3>
+        <h3 className="font-semibold text-slate-900 text-base">Form Pencatatan Kunjungan</h3>
         <p className="text-xs text-slate-500 mt-0.5">
           Pastikan satuan ukuran sesuai instrumen yang terkalibrasi.
         </p>
@@ -136,7 +136,7 @@ export const VisitForm: React.FC<{ childId: string; posyanduId: string }> = ({
       </div>
       {msg && (
         <div
-          className={`text-xs font-medium px-3.5 py-2.5 rounded-xl border ${
+          className={`text-xs font-medium px-3.5 py-2.5 rounded-[10px] border ${
             isError
               ? "text-rose-800 bg-rose-50 border-rose-200"
               : "text-emerald-800 bg-emerald-50 border-emerald-200"

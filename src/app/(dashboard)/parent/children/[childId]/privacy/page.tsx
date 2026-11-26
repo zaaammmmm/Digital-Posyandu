@@ -33,7 +33,7 @@ export default async function ChildPrivacyPage({ params }: { params: Promise<{ c
         </div>
       </div>
       <section className="posyandu-card p-5 space-y-3">
-        <h3 className="font-bold text-sm text-slate-900">Ringkasan otomatis (AI)</h3>
+        <h3 className="font-semibold text-sm text-slate-900">Ringkasan otomatis (AI)</h3>
         <p className="text-sm text-slate-700">
           Setelah kunjungan disahkan petugas, aplikasi dapat membuat ringkasan singkat dari data terverifikasi.
           Jika persetujuan dicabut, ringkasan baru tidak dibuat dan ringkasan yang sudah ada tidak ditampilkan.
@@ -43,7 +43,7 @@ export default async function ChildPrivacyPage({ params }: { params: Promise<{ c
         <ConsentControl childId={childId} purpose={AI_SUMMARY_PURPOSE} noticeVersion={AI_SUMMARY_NOTICE_VERSION} allowed={allowed} />
       </section>
       <section className="posyandu-card p-5 space-y-2">
-        <h3 className="font-bold text-sm text-slate-900">Riwayat pilihan</h3>
+        <h3 className="font-semibold text-sm text-slate-900">Riwayat pilihan</h3>
         {history.length === 0 && <p className="text-sm text-slate-600">Belum ada pilihan yang dicatat.</p>}
         <ul className="space-y-1 text-sm text-slate-800">
           {history.map(h => <li key={h.id}>{String(h.capturedAt).slice(0, 10)} &mdash; {STATUS_LABEL[String(h.consentStatus)] || String(h.consentStatus)}</li>)}

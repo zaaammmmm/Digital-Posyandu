@@ -46,7 +46,7 @@ export const KnowledgeCreateForm: React.FC = () => {
 
   return (
     <form onSubmit={submit} className="posyandu-card p-5 sm:p-6 space-y-3">
-      <h4 className="font-bold text-sm sm:text-base text-slate-900">Ajukan Materi Baru</h4>
+      <h4 className="font-semibold text-sm sm:text-base text-slate-900">Ajukan Materi Baru</h4>
       <p className="text-xs text-slate-500">Materi baru berstatus menunggu peninjauan dan baru dipakai setelah disahkan.</p>
       <div>
         <label className="posyandu-label" htmlFor="kn-title">Judul</label>
@@ -75,7 +75,7 @@ export const KnowledgeCreateForm: React.FC = () => {
         <input id="kn-keywords" className="posyandu-input" value={keywords} onChange={e => setKeywords(e.target.value)} />
       </div>
       {message && (
-        <p role={isError ? "alert" : "status"} className={`rounded-xl border px-3.5 py-2.5 text-xs font-medium ${isError
+        <p role={isError ? "alert" : "status"} className={`rounded-[10px] border px-3.5 py-2.5 text-xs font-medium ${isError
           ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{message}</p>
       )}
       <Button type="submit" disabled={loading}>{loading ? "Menyimpan..." : "Kirim untuk ditinjau"}</Button>

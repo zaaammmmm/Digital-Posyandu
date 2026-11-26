@@ -22,12 +22,12 @@ export default async function CorrectVisitPage({ params }: { params: Promise<{ v
   return (
     <div className="max-w-lg mx-auto posyandu-card p-6 sm:p-7 space-y-5">
       <div className="border-b border-slate-100 pb-3">
-        <h2 className="text-lg font-bold text-slate-900">Koreksi Nilai Pengukuran</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Koreksi Nilai Pengukuran</h2>
         <p className="text-xs text-slate-500 mt-0.5">
           {child ? `${child.fullName} (${child.registrationNumber})` : "-"} &bull; kunjungan {String(visit.visitDate)}
         </p>
       </div>
-      <p className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
+      <p className="rounded-[10px] bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
         Nilai lama tidak dihapus. Koreksi membuat versi baru, mengembalikan kunjungan ke status menunggu verifikasi,
         dan tercatat di audit trail beserta alasannya.
       </p>

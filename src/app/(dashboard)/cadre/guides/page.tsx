@@ -24,10 +24,10 @@ export default async function GuidesPage({ searchParams }: { searchParams: Promi
       </div>
       <form method="get" className="flex gap-2" role="search">
         <input name="q" defaultValue={q} aria-label="Cari panduan" placeholder="Cari judul, isi, atau kata kunci" className="posyandu-input" />
-        <button type="submit" className="rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-emerald-50">Cari</button>
+        <button type="submit" className="rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-emerald-50">Cari</button>
       </form>
       <div className="posyandu-card p-5 sm:p-6 space-y-3 border-l-4 border-l-emerald-600">
-        <h4 className="font-bold text-sm sm:text-base text-emerald-900">
+        <h4 className="font-semibold text-sm sm:text-base text-emerald-900">
           Panduan Standar Pengukuran Antropometri
         </h4>
         <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
@@ -45,7 +45,7 @@ export default async function GuidesPage({ searchParams }: { searchParams: Promi
       )}
       {docs.map(d => (
         <article key={d.id} className="posyandu-card p-5 sm:p-6 space-y-2">
-          <h4 className="font-bold text-sm sm:text-base text-slate-900">{String(d.title)}</h4>
+          <h4 className="font-semibold text-sm sm:text-base text-slate-900">{String(d.title)}</h4>
           <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">{String(d.text).slice(0, 1200)}</p>
           <p className="text-xs font-medium text-slate-500">
             Sumber: {String(d.sourceTitle)} &bull; Versi {String(d.version)}

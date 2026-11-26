@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity, Baby, BookOpen, ClipboardList, FileBarChart2, FileText,
-  Building2, ClipboardCheck, HeartPulse, LayoutDashboard, Menu, ShieldCheck, UsersRound, X,
+  Building2, ClipboardCheck, HeartPulse, LayoutDashboard, Menu, Plus, ShieldCheck, UsersRound, X,
 } from "lucide-react";
 
 export type NavRole = "parent" | "cadre" | "health_worker" | "posyandu_admin" | "content_reviewer" | "system_admin";
@@ -91,11 +91,8 @@ export function DashboardNavigation({ role, homeHref }: { role: NavRole; homeHre
 
       <aside className={`app-sidebar ${mobileOpen ? "is-open" : ""}`}>
         <Link href={homeHref} className="sidebar-brand" onClick={closeMobile}>
-          <span className="sidebar-brand-mark"><HeartPulse size={21} strokeWidth={2.2} /></span>
-          <span className="sidebar-brand-copy">
-            <strong>digital<span>posyandu</span></strong>
-            <small>Ruang layanan kesehatan</small>
-          </span>
+          <span className="sidebar-brand-mark"><Plus size={18} strokeWidth={3} aria-hidden="true" /></span>
+          <span className="sidebar-brand-copy">Digital Posyandu</span>
         </Link>
 
         <div className="sidebar-tenant">
@@ -122,23 +119,14 @@ export function DashboardNavigation({ role, homeHref }: { role: NavRole; homeHre
                     aria-current={active ? "page" : undefined}
                     className={`sidebar-link ${active ? "is-active" : ""}`}
                   >
-                    <Icon size={18} strokeWidth={1.9} />
+                    <Icon size={19} strokeWidth={1.9} />
                     <span>{item.label}</span>
-                    {active && <span className="sidebar-active-mark" />}
                   </Link>
                 );
               })}
             </div>
           ))}
         </nav>
-
-        <div className="sidebar-footer">
-          <div className="sidebar-footer-icon"><Activity size={17} /></div>
-          <div>
-            <strong>Digitalisasi Posyandu</strong>
-            <span>Catat. Pantau. Tindak lanjuti.</span>
-          </div>
-        </div>
       </aside>
     </>
   );
@@ -153,7 +141,7 @@ export function DashboardTopbar({ role }: { role: NavRole }) {
   return (
     <header className="app-topbar">
       <div className="topbar-heading">
-        <span className="topbar-eyebrow">DIGITAL POSYANDU / RUANG KERJA</span>
+        <span className="topbar-eyebrow">RUANG KERJA</span>
         <span className="topbar-page-title">{pageName}</span>
       </div>
       <div className="topbar-actions">

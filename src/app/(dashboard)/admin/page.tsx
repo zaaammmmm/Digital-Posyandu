@@ -16,19 +16,19 @@ export default async function AdminPage() {
       </div>
       <div className="grid md:grid-cols-3 gap-4">
         <Link href="/admin/users" className="posyandu-card-interactive p-5 space-y-1.5 block">
-          <h4 className="font-bold text-sm text-slate-900">Pengguna &amp; Peran</h4>
+          <h4 className="font-semibold text-sm text-slate-900">Pengguna &amp; Peran</h4>
           <p className="text-xs text-slate-600 leading-relaxed">
             Buat akun kader, bidan, dan orang tua, serta aktifkan atau nonaktifkan akses.
           </p>
         </Link>
         <Link href="/admin/reports" className="posyandu-card-interactive p-5 space-y-1.5 block">
-          <h4 className="font-bold text-sm text-slate-900">Rekap Layanan & Ekspor CSV</h4>
+          <h4 className="font-semibold text-sm text-slate-900">Rekap Layanan & Ekspor CSV</h4>
           <p className="text-xs text-slate-600 leading-relaxed">
             Unduh data agregat Posyandu tanpa PII.
           </p>
         </Link>
         <Link href="/admin/audit-logs" className="posyandu-card-interactive p-5 space-y-1.5 block">
-          <h4 className="font-bold text-sm text-slate-900">Audit Trail & Koreksi</h4>
+          <h4 className="font-semibold text-sm text-slate-900">Audit Trail & Koreksi</h4>
           <p className="text-xs text-slate-600 leading-relaxed">
             Pantau seluruh histori pengubahan data sah.
           </p>

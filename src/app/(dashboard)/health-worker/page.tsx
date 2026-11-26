@@ -97,7 +97,7 @@ export default async function HealthWorkerDashboard() {
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-sm font-bold text-slate-900">Imunisasi &amp; Vitamin Menunggu Verifikasi ({serviceEvents.length})</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Imunisasi &amp; Vitamin Menunggu Verifikasi ({serviceEvents.length})</h2>
         <div className="posyandu-table-wrap">
           <table className="posyandu-table">
             <thead className="posyandu-thead">

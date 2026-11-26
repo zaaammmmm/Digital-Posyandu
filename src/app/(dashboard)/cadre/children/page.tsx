@@ -42,7 +42,7 @@ export default async function ChildrenListPage({ searchParams }: { searchParams:
       </div>
       <form method="get" role="search" className="flex gap-2">
         <input name="q" defaultValue={q} aria-label="Cari anak" placeholder="Cari nama atau nomor registrasi" className="posyandu-input" />
-        <button type="submit" className="rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-emerald-50">Cari</button>
+        <button type="submit" className="rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-emerald-50">Cari</button>
       </form>
       <div className="posyandu-table-wrap">
         <table className="posyandu-table">

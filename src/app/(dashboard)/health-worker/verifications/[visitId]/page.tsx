@@ -26,10 +26,10 @@ export default async function VerifyVisitDetailPage({ params }: { params: Promis
   return (
     <div className="max-w-lg mx-auto posyandu-card p-6 sm:p-7 space-y-5">
       <div className="border-b border-slate-100 pb-3">
-        <h2 className="text-lg font-bold text-slate-900">Verifikasi Catatan Pengukuran</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Verifikasi Catatan Pengukuran</h2>
         <p className="text-xs text-slate-500 mt-0.5">Tinjau hasil antropometri sebelum disahkan</p>
       </div>
-      <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-xl text-xs sm:text-sm space-y-2 text-slate-700">
+      <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-[10px] text-xs sm:text-sm space-y-2 text-slate-700">
         <p><strong className="text-slate-900">Anak:</strong> {child ? `${child.fullName} (${child.registrationNumber})` : "-"}</p>
         <p><strong className="text-slate-900">Tanggal kunjungan:</strong> {String(visit.visitDate)}</p>
         <p><strong className="text-slate-900">Status:</strong> <StatusBadge status={status} /></p>

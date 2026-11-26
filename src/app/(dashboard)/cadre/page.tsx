@@ -1,9 +1,45 @@
 import React from "react";
 import Link from "next/link";
+import {
+  ArrowUpRight,
+  Baby,
+  BookOpen,
+  ClipboardCheck,
+  ClipboardList,
+  Plus,
+  UsersRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { adminDb } from "@/lib/firebase/admin";
 import { requirePageContext } from "@/lib/auth/page-context";
 import { todayInJakarta } from "@/lib/data/child-lookup";
+
+const quickLinks = [
+  {
+    href: "/cadre/children",
+    title: "Data sasaran",
+    description: "Lihat dan kelola data anak",
+    icon: Baby,
+  },
+  {
+    href: "/cadre/followups",
+    title: "Tindak lanjut",
+    description: "Periksa catatan yang perlu ditangani",
+    icon: ClipboardCheck,
+  },
+  {
+    href: "/cadre/administration",
+    title: "Buku administrasi",
+    description: "Kegiatan, kehadiran, dan notulen",
+    icon: ClipboardList,
+  },
+  {
+    href: "/cadre/guides",
+    title: "Panduan kader",
+    description: "Buka panduan keterampilan kader",
+    icon: BookOpen,
+  },
+];
 
 export default async function CadreDashboard() {
   const ctx = await requirePageContext(["cadre", "health_worker", "posyandu_admin"]);
@@ -18,69 +54,98 @@ export default async function CadreDashboard() {
     adminDb.collection("supplement_events").where("posyanduId", "==", ctx.posyanduId)
       .where("verificationStatus", "==", "rejected").count().get(),
   ]);
+
+  const totalChildren = children.data().count;
+  const todayVisits = today.data().count;
+  const pendingCount = pending.data().count;
   const followUps = needsCorrection.data().count + rejectedImm.data().count + rejectedSupp.data().count;
+
   return (
-    <div className="space-y-6">
-      <div className="posyandu-page-header">
+    <div className="cadre-dashboard">
+      <header className="cadre-page-heading">
         <div>
-          <h1 className="posyandu-page-title">Dashboard Kader Posyandu</h1>
+          <p className="cadre-eyebrow">RINGKASAN POSYANDU</p>
+          <h1 className="posyandu-page-title">Dashboard Kader</h1>
           <p className="posyandu-page-subtitle">
-            Rekap pelayanan hari kegiatan & administrasi terpadu
+            Pantau sasaran, kunjungan, dan pekerjaan yang membutuhkan perhatian.
           </p>
         </div>
-        <Link href="/cadre/children/new">
-          <Button>+ Daftarkan Anak</Button>
+        <Link href="/cadre/children/new" className="cadre-primary-link">
+          <Button><Plus size={16} strokeWidth={2.2} /> Daftarkan anak</Button>
         </Link>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-slate-400">
-          <p className="text-xs font-medium text-slate-500">Sasaran Terdaftar</p>
-          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1.5">{children.data().count}</p>
-        </div>
-        <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-emerald-600">
-          <p className="text-xs font-medium text-slate-500">Kunjungan Hari Ini</p>
-          <p className="text-2xl sm:text-3xl font-bold text-emerald-700 mt-1.5">{today.data().count}</p>
-        </div>
-        <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-amber-500">
-          <p className="text-xs font-medium text-slate-500">Menunggu Verifikasi</p>
-          <p className="text-2xl sm:text-3xl font-bold text-amber-700 mt-1.5">{pending.data().count}</p>
-        </div>
-        <Link href="/cadre/followups" className="posyandu-card p-4 sm:p-5 border-t-4 border-t-rose-500 block">
-          <p className="text-xs font-medium text-slate-500">Tindak Lanjut</p>
-          <p className="text-2xl sm:text-3xl font-bold text-rose-700 mt-1.5">{followUps}</p>
+      <section className="cadre-metrics" aria-label="Ringkasan pelayanan">
+        <article className="cadre-metric-card cadre-metric-featured">
+          <div className="cadre-metric-topline">
+            <span className="cadre-metric-icon"><UsersRound size={18} /></span>
+            <span className="cadre-metric-period">Seluruh sasaran</span>
+          </div>
+          <div>
+            <p className="cadre-metric-label">Anak terdaftar</p>
+            <p className="cadre-metric-value">{totalChildren.toLocaleString("id-ID")}</p>
+          </div>
+          <p className="cadre-metric-foot">Total data sasaran pada Posyandu aktif</p>
+        </article>
+
+        <article className="cadre-metric-card">
+          <div className="cadre-metric-topline">
+            <span className="cadre-metric-icon is-green"><ClipboardCheck size={18} /></span>
+            <span className="cadre-metric-period">Hari ini</span>
+          </div>
+          <div>
+            <p className="cadre-metric-label">Kunjungan tercatat</p>
+            <p className="cadre-metric-value">{todayVisits.toLocaleString("id-ID")}</p>
+          </div>
+          <p className="cadre-metric-foot">Catatan kunjungan hari ini</p>
+        </article>
+
+        <article className="cadre-metric-card">
+          <div className="cadre-metric-topline">
+            <span className="cadre-metric-icon is-amber"><ClipboardList size={18} /></span>
+            <span className="cadre-metric-period">Perlu ditinjau</span>
+          </div>
+          <div>
+            <p className="cadre-metric-label">Menunggu verifikasi</p>
+            <p className="cadre-metric-value is-amber">{pendingCount.toLocaleString("id-ID")}</p>
+          </div>
+          <p className="cadre-metric-foot">Data kunjungan menunggu pemeriksaan</p>
+        </article>
+
+        <Link href="/cadre/followups" className="cadre-metric-card cadre-metric-link">
+          <div className="cadre-metric-topline">
+            <span className="cadre-metric-icon is-red"><ClipboardCheck size={18} /></span>
+            <span className="cadre-metric-open"><ArrowUpRight size={16} /></span>
+          </div>
+          <div>
+            <p className="cadre-metric-label">Tindak lanjut</p>
+            <p className="cadre-metric-value is-red">{followUps.toLocaleString("id-ID")}</p>
+          </div>
+          <p className="cadre-metric-foot">Catatan koreksi dan penolakan</p>
         </Link>
-      </div>
+      </section>
 
-      <div className="posyandu-card p-5 sm:p-6 space-y-3.5">
-        <h3 className="font-bold text-sm text-slate-900">Akses Cepat Modul Kader</h3>
-        <div className="flex flex-wrap gap-2.5 text-xs font-semibold">
-          <Link
-            href="/cadre/children"
-            className="px-3.5 py-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 rounded-xl transition"
-          >
-            Daftar Anak
-          </Link>
-          <Link
-            href="/cadre/followups"
-            className="px-3.5 py-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 rounded-xl transition"
-          >
-            Tindak Lanjut
-          </Link>
-          <Link
-            href="/cadre/administration"
-            className="px-3.5 py-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 rounded-xl transition"
-          >
-            Buku Administrasi (Kegiatan, Hadir, Notulen)
-          </Link>
-          <Link
-            href="/cadre/guides"
-            className="px-3.5 py-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 rounded-xl transition"
-          >
-            Pusat Panduan Keterampilan Kader
-          </Link>
+      <section className="cadre-quick-section" aria-labelledby="cadre-quick-title">
+        <div className="cadre-section-heading">
+          <div>
+            <p className="cadre-eyebrow">AKSES MODUL</p>
+            <h2 id="cadre-quick-title">Lanjutkan pekerjaan</h2>
+            <p>Pilih modul yang ingin Anda buka.</p>
+          </div>
         </div>
-      </div>
+        <div className="cadre-quick-grid">
+          {quickLinks.map(({ href, title, description, icon: Icon }) => (
+            <Link href={href} className="cadre-quick-card" key={href}>
+              <span className="cadre-quick-icon"><Icon size={19} strokeWidth={1.8} /></span>
+              <span className="cadre-quick-copy">
+                <strong>{title}</strong>
+                <small>{description}</small>
+              </span>
+              <ArrowUpRight className="cadre-quick-arrow" size={17} />
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

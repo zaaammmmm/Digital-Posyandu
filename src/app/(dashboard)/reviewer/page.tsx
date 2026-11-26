@@ -28,7 +28,7 @@ export default async function ContentReviewerPage() {
         </div>
       </div>
       <div className="posyandu-card p-5 sm:p-6 space-y-3">
-        <h4 className="font-bold text-sm sm:text-base text-slate-900">Katalog Aturan Imunisasi Berversi</h4>
+        <h4 className="font-semibold text-sm sm:text-base text-slate-900">Katalog Aturan Imunisasi Berversi</h4>
         {usable.length === 0 ? (
           <p className="text-xs sm:text-sm text-amber-800">
             Belum ada aturan imunisasi yang disahkan dengan metadata lengkap. Jadwal dan pengingat imunisasi tidak ditampilkan
@@ -42,17 +42,17 @@ export default async function ContentReviewerPage() {
         )}
       </div>
       <div className="posyandu-card p-5 sm:p-6 space-y-2">
-        <h4 className="font-bold text-sm sm:text-base text-slate-900">Materi Edukasi (Knowledge Base)</h4>
+        <h4 className="font-semibold text-sm sm:text-base text-slate-900">Materi Edukasi (Knowledge Base)</h4>
         <p className="text-xs sm:text-sm text-slate-600">
           {knowledgeApproved} dokumen berstatus approved dari {knowledgeSnap.size} dokumen tersimpan.
         </p>
       </div>
       <KnowledgeCreateForm />
       <div className="posyandu-card p-5 sm:p-6 space-y-4">
-        <h4 className="font-bold text-sm sm:text-base text-slate-900">Menunggu Peninjauan ({pending.length})</h4>
+        <h4 className="font-semibold text-sm sm:text-base text-slate-900">Menunggu Peninjauan ({pending.length})</h4>
         {pending.length === 0 && <p className="text-xs sm:text-sm text-slate-600">Tidak ada materi yang menunggu peninjauan.</p>}
         {pending.map(doc => (
-          <div key={doc.id} className="rounded-xl border border-slate-200 p-4 space-y-2">
+          <div key={doc.id} className="rounded-[10px] border border-slate-200 p-4 space-y-2">
             <p className="text-sm font-semibold text-slate-900">{String(doc.title)}</p>
             <p className="text-xs text-slate-500">
               Sumber: {String(doc.sourceTitle)} &bull; Versi {String(doc.version)}
