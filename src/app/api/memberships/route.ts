@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
   if (typeof body.userId !== "string" || !ROLES.includes(body.role) || !["active", "inactive"].includes(body.status || "active")) {
     return NextResponse.json({ error: "User, role, atau status tidak valid" }, { status: 400 });
   }
+  const user = await adminDb.collection("users").doc(body.userId).get();
+  if (!user.exists) return NextResponse.json({ error: "Akun pengguna tidak ditemukan" }, { status: 404 });
   const id = `${body.userId}_${auth.posyanduId}`;
   await adminDb.collection("memberships").doc(id).set({
     userId: body.userId, posyanduId: auth.posyanduId,

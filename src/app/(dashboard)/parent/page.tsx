@@ -1,45 +1,33 @@
 import React from "react";
-import { VisitSummaryCard } from "@/components/ai/VisitSummaryCard";
+import { cookies } from "next/headers";
+import { requirePageSession } from "@/lib/auth/page-session";
+import { adminDb } from "@/lib/firebase/admin";
 import { GrowthChart } from "@/components/charts/GrowthChart";
 
-export default function ParentDashboard() {
-  const chartData = [
-    { month: 0, weight: 3.2, medianWho: 3.2, plus2Sd: 4.2, minus2Sd: 2.4 },
-    { month: 6, weight: 7.5, medianWho: 7.3, plus2Sd: 8.8, minus2Sd: 6.0 },
-    { month: 12, weight: 9.6, medianWho: 9.2, plus2Sd: 10.8, minus2Sd: 7.7 },
-    { month: 18, weight: 10.2, medianWho: 10.2, plus2Sd: 12.2, minus2Sd: 8.8 },
-  ];
-
+export default async function ParentDashboard() {
+  const session = await requirePageSession();
+  const cookieStore = await cookies();
+  const posyanduId = cookieStore.get("active_posyandu")?.value;
+  if (!posyanduId) return <div className="posyandu-card p-5">Pilih Posyandu aktif untuk melihat catatan anak.</div>;
+  const membership = await adminDb.collection("memberships").doc(`${session.uid}_${posyanduId}`).get();
+  if (!membership.exists || membership.data()?.status !== "active" || membership.data()?.role !== "parent") {
+    return <div className="posyandu-card p-5">Akses orang tua tidak tersedia pada Posyandu ini.</div>;
+  }
+  const childrenSnap = await adminDb.collection("children").where("posyanduId", "==", posyanduId).where("guardianUids", "array-contains", session.uid).limit(50).get();
+  const children = childrenSnap.docs;
+  const selected = children[0];
+  let chartData: Array<{ ageMonths: number; weightKg: number; visitDate: string }> = [];
+  if (selected) {
+    const measurements = await adminDb.collection("anthropometry_measurements").where("childId", "==", selected.id).where("posyanduId", "==", posyanduId).where("verificationStatus", "==", "verified").limit(100).get();
+    chartData = measurements.docs.filter(d => !d.data().supersededAt).map(d => ({ ageMonths: Number(d.data().ageMonths), weightKg: Number(d.data().weightKg), visitDate: String(d.data().measuredAt || "") })).filter(d => Number.isFinite(d.ageMonths) && Number.isFinite(d.weightKg));
+  }
   return (
     <div className="space-y-6">
-      <div className="posyandu-page-header">
-        <div>
-          <h1 className="posyandu-page-title">Catatan Pertumbuhan Anak</h1>
-          <p className="posyandu-page-subtitle">Profil: Muhammad Rayyan (18 Bulan)</p>
-        </div>
-      </div>
-
-      <VisitSummaryCard
-        summaryText="Pada kunjungan 12 November 2026, berat badan tercatat 10,2 kg dan tinggi badan 78,4 cm. Dibandingkan kunjungan 12 Oktober 2026, berat badan tercatat bertambah 0,2 kg. Posisi pertumbuhan berada dalam batas standar baku WHO. Informasi ini bersifat pemantauan rutin dan bukan diagnosis medis."
-        generatedAt="2026-11-25T10:00:00Z"
-        safetyStatus="passed"
-      />
-
-      <GrowthChart data={chartData} />
-
-      <div className="posyandu-card p-5 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="font-bold text-sm text-slate-900">
-            Jadwal Imunisasi Berikutnya (Telah Disahkan)
-          </h3>
-          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-800 ring-1 ring-sky-200">
-            Terjadwal
-          </span>
-        </div>
-        <p className="text-xs sm:text-sm text-slate-600">
-          Campak-Rubela (MR) Lanjutan &bull; Usia 18 Bulan &bull; Sumber: Katalog Resmi Kemenkes
-        </p>
-      </div>
+      <div className="posyandu-page-header"><div><h1 className="posyandu-page-title">Catatan Pertumbuhan Anak</h1><p className="posyandu-page-subtitle">Data anak dan pengukuran terverifikasi pada Posyandu aktif.</p></div></div>
+      {children.length === 0 ? <div className="posyandu-card p-5 text-sm text-slate-600">Belum ada profil anak yang terhubung dengan akun wali ini.</div> : <>
+        <div className="posyandu-card p-5"><h2 className="font-bold text-slate-900">{selected!.data().fullName}</h2><p className="mt-1 text-sm text-slate-500">Nomor registrasi: {selected!.data().registrationNumber}</p><p className="mt-1 text-sm text-slate-500">Tanggal lahir: {selected!.data().dateOfBirth}</p></div>
+        <GrowthChart data={chartData} />
+      </>}
     </div>
   );
 }

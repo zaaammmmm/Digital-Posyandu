@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return NextResponse.json({ error: "Tanggal kunjungan harus berformat YYYY-MM-DD" }, { status: 400 });
     const parsedDate = new Date(`${date}T00:00:00.000Z`);
     if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) return NextResponse.json({ error: "Tanggal kunjungan tidak valid" }, { status: 400 });
+    if (parsedDate.getTime() > Date.now()) return NextResponse.json({ error: "Tanggal kunjungan tidak boleh berada jauh di masa depan" }, { status: 400 });
     const ageMonths = calculateAgeMonths(child.dateOfBirth, date);
     const weightKg = Number(measurements.weightKg);
     const lengthHeightCm = Number(measurements.lengthHeightCm);
@@ -27,6 +28,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Pengukuran tidak valid" }, { status: 400 });
     }
     const val = validateAnthropometry({ ageMonths, weightKg, lengthHeightCm, measurementType: measurements.measurementType });
+    const optionalMeasurement = (value: unknown, min: number, max: number) => {
+      if (value === undefined || value === null || value === "") return undefined;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
+    };
+    const headCircumferenceCm = optionalMeasurement(measurements.headCircumferenceCm, 20, 70);
+    const muacCm = optionalMeasurement(measurements.muacCm, 5, 35);
+    if (headCircumferenceCm === null || muacCm === null) return NextResponse.json({ error: "Lingkar kepala atau LILA di luar rentang teknis" }, { status: 400 });
     const now = new Date().toISOString();
     const visitRef = adminDb.collection("visits").doc();
     const measRef = adminDb.collection("anthropometry_measurements").doc();
@@ -41,6 +50,12 @@ export async function POST(req: NextRequest) {
       visitId: visitRef.id, childId, posyanduId: auth.posyanduId,
       ageMonths, sex: child.sex, weightKg, lengthHeightCm,
       measurementType: measurements.measurementType,
+      ...(headCircumferenceCm !== undefined ? { headCircumferenceCm } : {}),
+      ...(muacCm !== undefined ? { muacCm } : {}),
+      measurementUnit: { weight: "kg", lengthHeight: "cm", headCircumference: "cm", muac: "cm" },
+      measurementMethod: typeof measurements.measurementMethod === "string" ? measurements.measurementMethod.slice(0, 120) : null,
+      equipmentId: typeof measurements.equipmentId === "string" ? measurements.equipmentId.slice(0, 80) : null,
+      measurementNotes: typeof measurements.notes === "string" ? measurements.notes.slice(0, 500) : null,
       qualityFlags: val.qualityFlags, verificationStatus: "pending_verification",
       measuredAt: now, recordedBy: auth.uid,
     });

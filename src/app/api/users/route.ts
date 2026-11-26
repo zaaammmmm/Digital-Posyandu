@@ -48,6 +48,15 @@ export async function POST(req: NextRequest) {
     await batch.commit();
     return NextResponse.json({ success: true, uid: user.uid }, { status: 201 });
   } catch (error) {
+    // Avoid orphaned Firebase Auth accounts when the Firestore provisioning batch fails.
+    const candidate = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    if (candidate) {
+      try {
+        const orphan = await adminAuth.getUserByEmail(candidate);
+        const member = await adminDb.collection("memberships").doc(`${orphan.uid}_${auth.posyanduId}`).get();
+        if (!member.exists) await adminAuth.deleteUser(orphan.uid);
+      } catch { /* The original provisioning error remains authoritative. */ }
+    }
     return NextResponse.json({ error: error instanceof Error ? error.message : "Gagal membuat pengguna" }, { status: 400 });
   }
 }

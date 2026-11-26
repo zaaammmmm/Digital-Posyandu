@@ -6,6 +6,7 @@ import { buildSafeAiPayload } from "@/lib/ai/payload-builder";
 import { retrieveApprovedKnowledge } from "@/lib/ai/knowledge-base";
 import { writeAuditLog } from "@/lib/audit/audit-logger";
 import { requireAuth, isAuthError } from "@/lib/auth/server";
+import { validateSummaryProvenance } from "@/lib/ai/summary-provenance";
 
 export async function POST(req: NextRequest, context: { params: Promise<{ visitId: string }> }) {
   const auth = await requireAuth(req, ["health_worker", "posyandu_admin", "system_admin"]);
@@ -59,13 +60,20 @@ export async function POST(req: NextRequest, context: { params: Promise<{ visitI
       })),
     });
     const aiRes = await generateSafeSummary(safePayload);
+    const generatedAt = new Date().toISOString();
+    const provenance = {
+      visitId, childId: String(visit.childId), inputRecordVersion: nextVersion,
+      generatedAt, modelProvider: aiRes.modelProvider, modelVersion: aiRes.modelVersion,
+      promptVersion: aiRes.promptVersion, knowledgeSourceIds: snippets.map(s => s.id),
+      safetyStatus: aiRes.safetyStatus,
+    };
+    if (!validateSummaryProvenance(provenance)) {
+      throw new Error("Metadata provenance ringkasan tidak valid");
+    }
     const summaryRef = await adminDb.collection("ai_summaries").add({
       posyanduId: auth.posyanduId, guardianUid: visit.guardianUid || null,
-      childId: visit.childId, visitId, inputRecordVersion: nextVersion,
-      modelProvider: aiRes.modelProvider, modelVersion: aiRes.modelVersion,
-      promptVersion: aiRes.promptVersion, knowledgeSourceIds: snippets.map(s => s.id),
-      generatedText: aiRes.text, safetyStatus: aiRes.safetyStatus,
-      reviewStatus: "auto_checked", generatedAt: now,
+      childId: visit.childId, ...provenance, generatedText: aiRes.text,
+      reviewStatus: "auto_checked",
     });
     return NextResponse.json({ success: true, visitId, summaryId: summaryRef.id,
       safetyStatus: aiRes.safetyStatus, knowledgeSources: snippets.length,

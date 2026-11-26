@@ -12,7 +12,8 @@
     "check": "npm run typecheck && npm test && npm run build",
     "seed:firestore": "node scripts/seed-firestore.cjs",
     "firebase:deploy": "firebase deploy --only firestore:rules,firestore:indexes",
-    "emulators": "firebase emulators:start --only auth,firestore"
+    "emulators": "firebase emulators:start --only auth,firestore",
+    "preflight:production": "node scripts/production-preflight.mjs"
   },
   "dependencies": {
     "firebase": "^11.10.0",

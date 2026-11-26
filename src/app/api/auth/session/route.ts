@@ -10,24 +10,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "idToken dan posyanduId wajib diisi" }, { status: 400 });
     }
     const decoded = await adminAuth.verifyIdToken(idToken, true);
-    const memberships = await adminDb.collection("memberships")
-      .where("userId", "==", decoded.uid)
-      .where("posyanduId", "==", posyanduId)
-      .where("status", "==", "active").limit(1).get();
-    if (decoded.role !== "system_admin" && memberships.empty) {
-      return NextResponse.json({ error: "Keanggotaan Posyandu tidak aktif" }, { status: 403 });
+    const membership = await adminDb.collection("memberships").doc(`${decoded.uid}_${posyanduId}`).get();
+    if (!membership.exists || membership.data()?.userId !== decoded.uid ||
+        membership.data()?.posyanduId !== posyanduId || membership.data()?.status !== "active") {
+      return NextResponse.json({ error: "Keanggotaan aktif tidak ditemukan atau tidak valid" }, { status: 403 });
     }
-    const membershipRole = memberships.docs[0]?.data().role;
-    const validRoles = ["parent", "cadre", "health_worker", "posyandu_admin", "content_reviewer"];
-    if (decoded.role !== "system_admin" &&
-        (typeof membershipRole !== "string" || !validRoles.includes(membershipRole) ||
-         (decoded.role && decoded.role !== membershipRole))) {
-      return NextResponse.json({ error: "Role akun dan membership tidak sesuai" }, { status: 403 });
+    const membershipRole = membership.data()?.role;
+    const validRoles = ["parent", "cadre", "health_worker", "posyandu_admin", "content_reviewer", "system_admin"];
+    if (typeof membershipRole !== "string" || !validRoles.includes(membershipRole)) {
+      return NextResponse.json({ error: "Role membership tidak valid" }, { status: 403 });
+    }
+    const tenant = await adminDb.collection("posyandu").doc(posyanduId).get();
+    if (!tenant.exists || tenant.data()?.status !== "active") {
+      return NextResponse.json({ error: "Posyandu tidak aktif atau tidak ditemukan" }, { status: 403 });
     }
     const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn: SESSION_DURATION_MS });
     const response = NextResponse.json({
       success: true, uid: decoded.uid,
-      role: decoded.role === "system_admin" ? "system_admin" : membershipRole, posyanduId,
+      role: membershipRole, posyanduId,
     });
     response.cookies.set("__session", sessionCookie, {
       httpOnly: true, secure: process.env.NODE_ENV === "production",

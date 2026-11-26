@@ -19,6 +19,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   if (typeof body.fullName !== "string" || !body.fullName.trim()) return NextResponse.json({ error: "Nama wali wajib diisi" }, { status: 400 });
   if (body.userId && typeof body.userId !== "string") return NextResponse.json({ error: "userId tidak valid" }, { status: 400 });
+  if (body.relationship !== undefined && (typeof body.relationship !== "string" || body.relationship.trim().length > 80)) return NextResponse.json({ error: "Hubungan wali tidak valid" }, { status: 400 });
+  if (body.contact !== undefined && (typeof body.contact !== "string" || body.contact.length > 300)) return NextResponse.json({ error: "Kontak wali tidak valid" }, { status: 400 });
+  if (body.userId) {
+    const member = await adminDb.collection("memberships").doc(`${body.userId}_${auth.posyanduId}`).get();
+    if (!member.exists || member.data()?.status !== "active" || member.data()?.role !== "parent") return NextResponse.json({ error: "Akun wali harus memiliki membership parent aktif" }, { status: 400 });
+  }
   const ref = adminDb.collection("guardians").doc();
   const now = new Date().toISOString();
   await ref.set({ posyanduId: auth.posyanduId, userId: body.userId || null,
