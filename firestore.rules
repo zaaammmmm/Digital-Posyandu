@@ -121,6 +121,9 @@ service cloud.firestore {
       allow read: if signedIn() && resource.data.status == 'approved';
       allow write: if false;
     }
+    // Stage 4: embeddings and chatbot audit events are server-only (Admin SDK). No client access.
+    match /knowledge_embeddings/{embeddingId} { allow read, write: if false; }
+    match /ai_chat_events/{eventId} { allow read, write: if false; }
 
     // Operational and correction records.
     match /administrative_records/{recordId} {

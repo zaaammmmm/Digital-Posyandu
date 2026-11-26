@@ -53,7 +53,9 @@ test("navigation is filtered by role and the layout passes the membership role",
   assert.match(layout, /role=\{ctx\.role\}/);
   const parentItems = nav.split("\n").filter(l => l.includes("href:") && l.includes("roles:"));
   const forParent = parentItems.filter(l => /roles: \[[^\]]*"parent"/.test(l));
-  assert.equal(forParent.length, 1, "parent should only see the parent portal");
+  // Parents see their portal plus the sourced education chatbot (Stage 4); nothing staff-facing.
+  const hrefs = forParent.map(l => l.match(/href: "([^"]+)"/)![1]).sort();
+  assert.deepEqual(hrefs, ["/chat", "/parent"], "parent should only see the parent portal and the education chat");
 });
 
 test("firestore rules no longer grant system_admin health-data reads", () => {

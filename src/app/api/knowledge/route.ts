@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth, isAuthError } from "@/lib/auth/server";
+import { scanKnowledgeDocument } from "@/lib/ai/prompt-injection";
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, ["content_reviewer", "system_admin"]);
@@ -13,6 +14,10 @@ export async function POST(req: NextRequest) {
     let ok = false;
     try { const u = new URL(String(body.sourceUrl)); ok = u.protocol === "https:" || u.protocol === "http:"; } catch { /* invalid */ }
     if (!ok) return NextResponse.json({ error: "Tautan sumber harus berupa URL http atau https" }, { status: 400 });
+  }
+  const scan = scanKnowledgeDocument(body);
+  if (scan.detected) {
+    return NextResponse.json({ error: "Isi dokumen mengandung pola instruksi untuk AI yang tidak diizinkan. Ubah dokumen lalu kirim ulang.", codes: scan.codes }, { status: 422 });
   }
   const ref = adminDb.collection("knowledge_documents").doc();
   await ref.set({ title: body.title.trim(), text: body.text.slice(0, 30000),

@@ -86,6 +86,8 @@ Jika salah satu pemeriksaan gagal, jangan tampilkan output model. Gunakan templa
 
 ## 7. Optional chatbot RAG
 
+> Implementasi Tahap 4 (retrieval hybrid, chatbot bersitasi, proteksi injeksi, golden test): lihat `docs/STAGE-4-AI-RAG.md`.
+
 ### Knowledge base
 - Buku KIA dan panduan Kemenkes yang berlaku.
 - Panduan keterampilan dasar kader dan pengelolaan Posyandu.
