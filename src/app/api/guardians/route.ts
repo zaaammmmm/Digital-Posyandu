@@ -4,7 +4,7 @@ import { requireAuth, isAuthError } from "@/lib/auth/server";
 import { encryptField } from "@/lib/crypto/field-encryption";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, ["cadre", "health_worker", "posyandu_admin", "system_admin"]);
+  const auth = await requireAuth(req, ["cadre", "health_worker", "posyandu_admin"]);
   if (isAuthError(auth)) return auth;
   const snap = await adminDb.collection("guardians").where("posyanduId", "==", auth.posyanduId).limit(200).get();
   return NextResponse.json({ items: snap.docs.map(d => {

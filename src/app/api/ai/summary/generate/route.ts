@@ -5,7 +5,7 @@ import { buildSafeAiPayload } from "@/lib/ai/payload-builder";
 import { requireAuth, isAuthError } from "@/lib/auth/server";
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(req, ["health_worker", "posyandu_admin", "system_admin"]);
+  const auth = await requireAuth(req, ["health_worker"]);
   if (isAuthError(auth)) return auth;
   try {
     const { visitId } = await req.json();

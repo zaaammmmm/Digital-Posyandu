@@ -5,7 +5,7 @@ import { requireAuth, isAuthError } from "@/lib/auth/server";
 
 // US-T01: rejecting verification requires a reason; the record is never deleted.
 export async function POST(req: NextRequest, context: { params: Promise<{ visitId: string }> }) {
-  const auth = await requireAuth(req, ["health_worker", "posyandu_admin", "system_admin"]);
+  const auth = await requireAuth(req, ["health_worker"]);
   if (isAuthError(auth)) return auth;
   let body: { reason?: unknown };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Body tidak valid" }, { status: 400 }); }

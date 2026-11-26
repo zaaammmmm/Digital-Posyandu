@@ -1,7 +1,9 @@
 import React from "react";
 import Link from "next/link";
+import { requirePageContext } from "@/lib/auth/page-context";
 
-export default function AdminPage() {
+export default async function AdminPage() {
+  await requirePageContext(["posyandu_admin", "system_admin"]);
   return (
     <div className="space-y-5">
       <div className="posyandu-page-header">

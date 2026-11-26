@@ -6,7 +6,7 @@ import { requireAuth, isAuthError } from "@/lib/auth/server";
 // Reviewing a request only records the decision. Changing measurement values still
 // goes through POST /api/visits/{id}/correct, which versions the record and audits it.
 export async function PATCH(req: NextRequest, context: { params: Promise<{ requestId: string }> }) {
-  const auth = await requireAuth(req, ["health_worker", "posyandu_admin", "system_admin"]);
+  const auth = await requireAuth(req, ["health_worker"]);
   if (isAuthError(auth)) return auth;
   let body: { decision?: unknown; note?: unknown };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Body tidak valid" }, { status: 400 }); }

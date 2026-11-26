@@ -7,7 +7,9 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 test("dashboard keeps server-side session protection and existing logout endpoint", () => {
   const layout = read("../src/app/(dashboard)/layout.tsx");
   const nav = read("../src/components/layout/DashboardNavigation.tsx");
-  assert.match(layout, /requirePageSession\(\)/);
+  // requirePageContext() wraps requirePageSession() and also resolves the membership role.
+  assert.match(layout, /requirePageContext\(\)/);
+  assert.match(read("../src/lib/auth/page-context.ts"), /requirePageSession\(\)/);
   assert.match(nav, /action="\/api\/auth\/logout"/);
 });
 

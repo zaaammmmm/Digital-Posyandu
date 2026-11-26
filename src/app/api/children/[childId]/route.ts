@@ -3,7 +3,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth, isAuthError } from "@/lib/auth/server";
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ childId: string }> }) {
-  const auth = await requireAuth(req, ["parent", "cadre", "health_worker", "posyandu_admin", "system_admin"]);
+  const auth = await requireAuth(req, ["parent", "cadre", "health_worker", "posyandu_admin"]);
   if (isAuthError(auth)) return auth;
   const { childId } = await ctx.params;
   const ref = adminDb.collection("children").doc(childId);

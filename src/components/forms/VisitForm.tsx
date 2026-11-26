@@ -10,6 +10,10 @@ export const VisitForm: React.FC<{ childId: string; posyanduId: string }> = ({
   const [weightKg, setWeightKg] = useState("");
   const [lengthHeightCm, setLengthHeightCm] = useState("");
   const [measurementType, setMeasurementType] = useState<"recumbent_length" | "standing_height">("standing_height");
+  const [headCircumferenceCm, setHeadCircumferenceCm] = useState("");
+  const [muacCm, setMuacCm] = useState("");
+  const [measurementMethod, setMeasurementMethod] = useState("");
+  const [equipmentId, setEquipmentId] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [isError, setIsError] = useState(false);
@@ -34,6 +38,10 @@ export const VisitForm: React.FC<{ childId: string; posyanduId: string }> = ({
             weightKg: Number(weightKg),
             lengthHeightCm: Number(lengthHeightCm),
             measurementType,
+            ...(headCircumferenceCm ? { headCircumferenceCm: Number(headCircumferenceCm) } : {}),
+            ...(muacCm ? { muacCm: Number(muacCm) } : {}),
+            ...(measurementMethod.trim() ? { measurementMethod: measurementMethod.trim() } : {}),
+            ...(equipmentId.trim() ? { equipmentId: equipmentId.trim() } : {}),
           },
         }),
       });
@@ -43,6 +51,10 @@ export const VisitForm: React.FC<{ childId: string; posyanduId: string }> = ({
         setMsg("Kunjungan dicatat! Menunggu verifikasi tenaga kesehatan.");
         setWeightKg("");
         setLengthHeightCm("");
+        setHeadCircumferenceCm("");
+        setMuacCm("");
+        setMeasurementMethod("");
+        setEquipmentId("");
       } else {
         setIsError(true);
         setMsg(`Error: ${data.error}`);
@@ -97,6 +109,30 @@ export const VisitForm: React.FC<{ childId: string; posyanduId: string }> = ({
           <option value="standing_height">Berdiri (Tinggi Badan &ge; 24 Bulan)</option>
           <option value="recumbent_length">Terlentang (Panjang Badan &lt; 24 Bulan)</option>
         </select>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="posyandu-label" htmlFor="visit-head">Lingkar Kepala (cm)</label>
+          <input id="visit-head" type="number" step="0.1" min="20" max="70" value={headCircumferenceCm}
+            onChange={(e) => setHeadCircumferenceCm(e.target.value)} placeholder="Opsional" className="posyandu-input" />
+        </div>
+        <div>
+          <label className="posyandu-label" htmlFor="visit-muac">LILA (cm)</label>
+          <input id="visit-muac" type="number" step="0.1" min="5" max="35" value={muacCm}
+            onChange={(e) => setMuacCm(e.target.value)} placeholder="Opsional" className="posyandu-input" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="posyandu-label" htmlFor="visit-method">Metode / Cara Ukur</label>
+          <input id="visit-method" maxLength={120} value={measurementMethod}
+            onChange={(e) => setMeasurementMethod(e.target.value)} placeholder="Opsional" className="posyandu-input" />
+        </div>
+        <div>
+          <label className="posyandu-label" htmlFor="visit-equipment">Alat Ukur (ID)</label>
+          <input id="visit-equipment" maxLength={80} value={equipmentId}
+            onChange={(e) => setEquipmentId(e.target.value)} placeholder="Opsional" className="posyandu-input" />
+        </div>
       </div>
       {msg && (
         <div

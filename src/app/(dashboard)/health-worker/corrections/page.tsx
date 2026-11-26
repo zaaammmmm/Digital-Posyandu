@@ -12,7 +12,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default async function CorrectionQueuePage() {
-  const ctx = await requirePageContext(["health_worker", "posyandu_admin", "system_admin"]);
+  const ctx = await requirePageContext(["health_worker"]);
   const snap = await adminDb.collection("correction_requests").where("posyanduId", "==", ctx.posyanduId).limit(100).get();
   const items = rowsOf(snap)
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));

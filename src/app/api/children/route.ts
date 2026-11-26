@@ -3,7 +3,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth, isAuthError } from "@/lib/auth/server";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, ["parent", "cadre", "health_worker", "posyandu_admin", "system_admin"]);
+  const auth = await requireAuth(req, ["parent", "cadre", "health_worker", "posyandu_admin"]);
   if (isAuthError(auth)) return auth;
   let query = adminDb.collection("children").where("posyanduId", "==", auth.posyanduId);
   if (auth.role === "parent") query = query.where("guardianUids", "array-contains", auth.uid) as typeof query;

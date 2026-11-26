@@ -6,7 +6,7 @@ import { writeAuditLog } from "@/lib/audit/audit-logger";
 import { requireAuth, isAuthError } from "@/lib/auth/server";
 
 export async function POST(req: NextRequest, context: { params: Promise<{ visitId: string }> }) {
-  const auth = await requireAuth(req, ["health_worker", "posyandu_admin", "system_admin"]);
+  const auth = await requireAuth(req, ["health_worker"]);
   if (isAuthError(auth)) return auth;
   const { visitId } = await context.params;
   const body = await req.json();

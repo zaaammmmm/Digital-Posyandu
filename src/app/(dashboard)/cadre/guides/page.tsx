@@ -1,6 +1,8 @@
 import React from "react";
+import { requirePageContext } from "@/lib/auth/page-context";
 
-export default function GuidesPage() {
+export default async function GuidesPage() {
+  await requirePageContext(["cadre", "health_worker"]);
   return (
     <div className="space-y-5">
       <div className="posyandu-page-header">

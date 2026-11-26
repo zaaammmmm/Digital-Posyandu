@@ -6,10 +6,8 @@ import { rowsOf } from "@/lib/data/rows";
 import { requirePageContext } from "@/lib/auth/page-context";
 import { lookupChildLabels } from "@/lib/data/child-lookup";
 
-const STAFF = ["health_worker", "posyandu_admin", "system_admin"] as const;
-
 export default async function HealthWorkerDashboard() {
-  const ctx = await requirePageContext([...STAFF]);
+  const ctx = await requirePageContext(["health_worker"]);
   const [visitSnap, measSnap, correctionCount] = await Promise.all([
     adminDb.collection("visits").where("posyanduId", "==", ctx.posyanduId)
       .where("verificationStatus", "==", "pending_verification").limit(100).get(),

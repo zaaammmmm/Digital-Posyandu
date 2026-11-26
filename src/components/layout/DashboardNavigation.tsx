@@ -5,52 +5,64 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity, Baby, BookOpen, ClipboardList, FileBarChart2, FileText,
-  HeartPulse, LayoutDashboard, Menu, ShieldCheck, UsersRound, X,
+  Building2, HeartPulse, LayoutDashboard, Menu, ShieldCheck, UsersRound, X,
 } from "lucide-react";
+
+export type NavRole = "parent" | "cadre" | "health_worker" | "posyandu_admin" | "content_reviewer" | "system_admin";
 
 type NavigationItem = {
   label: string;
   href: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
   match?: string;
+  roles: NavRole[];
 };
 
 const sections: { title: string; items: NavigationItem[] }[] = [
   {
     title: "Ruang kerja",
     items: [
-      { label: "Dashboard kader", href: "/cadre", icon: LayoutDashboard, match: "/cadre" },
-      { label: "Data anak", href: "/cadre/children", icon: Baby, match: "/cadre/children" },
-      { label: "Administrasi", href: "/cadre/administration", icon: ClipboardList },
-      { label: "Panduan kader", href: "/cadre/guides", icon: BookOpen },
+      { label: "Dashboard kader", href: "/cadre", icon: LayoutDashboard, match: "/cadre", roles: ["cadre"] },
+      { label: "Data anak", href: "/cadre/children", icon: Baby, match: "/cadre/children", roles: ["cadre", "posyandu_admin"] },
+      { label: "Administrasi", href: "/cadre/administration", icon: ClipboardList, roles: ["cadre", "health_worker", "posyandu_admin"] },
+      { label: "Panduan kader", href: "/cadre/guides", icon: BookOpen, roles: ["cadre", "health_worker"] },
     ],
   },
   {
     title: "Pelayanan",
     items: [
-      { label: "Portal orang tua", href: "/parent", icon: HeartPulse, match: "/parent" },
-      { label: "Verifikasi nakes", href: "/health-worker", icon: ShieldCheck, match: "/health-worker" },
+      { label: "Portal orang tua", href: "/parent", icon: HeartPulse, match: "/parent", roles: ["parent"] },
+      { label: "Verifikasi nakes", href: "/health-worker", icon: ShieldCheck, match: "/health-worker", roles: ["health_worker"] },
     ],
   },
   {
     title: "Pengelolaan",
     items: [
-      { label: "Administrasi sistem", href: "/admin", icon: UsersRound, match: "/admin" },
-      { label: "Pengguna & peran", href: "/admin/users", icon: UsersRound },
-      { label: "Laporan layanan", href: "/admin/reports", icon: FileBarChart2 },
-      { label: "Audit trail", href: "/admin/audit-logs", icon: FileText },
-      { label: "Review konten", href: "/reviewer", icon: Activity, match: "/reviewer" },
+      { label: "Administrasi sistem", href: "/admin", icon: UsersRound, match: "/admin", roles: ["posyandu_admin", "system_admin"] },
+      { label: "Pengguna & peran", href: "/admin/users", icon: UsersRound, roles: ["posyandu_admin", "system_admin"] },
+      { label: "Profil Posyandu", href: "/admin/profile", icon: Building2, roles: ["posyandu_admin"] },
+      { label: "Laporan layanan", href: "/admin/reports", icon: FileBarChart2, roles: ["posyandu_admin", "system_admin"] },
+      { label: "Audit trail", href: "/admin/audit-logs", icon: FileText, roles: ["posyandu_admin", "health_worker", "system_admin"] },
+      { label: "Review konten", href: "/reviewer", icon: Activity, match: "/reviewer", roles: ["content_reviewer", "system_admin"] },
     ],
   },
 ];
+
+/** Menu visible to a role. Server-side page guards remain the real enforcement. */
+export function navigationFor(role: NavRole) {
+  return sections
+    .map(section => ({ ...section, items: section.items.filter(item => item.roles.includes(role)) }))
+    .filter(section => section.items.length > 0);
+}
 
 function isActive(pathname: string, item: NavigationItem) {
   const prefix = item.match || item.href;
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
 
-export function DashboardNavigation() {
+export function DashboardNavigation({ role, homeHref }: { role: NavRole; homeHref: string }) {
   const pathname = usePathname();
+  const visibleSections = navigationFor(role);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const closeMobile = () => setMobileOpen(false);
@@ -77,7 +89,7 @@ export function DashboardNavigation() {
       )}
 
       <aside className={`app-sidebar ${mobileOpen ? "is-open" : ""}`}>
-        <Link href="/cadre" className="sidebar-brand" onClick={closeMobile}>
+        <Link href={homeHref} className="sidebar-brand" onClick={closeMobile}>
           <span className="sidebar-brand-mark"><HeartPulse size={21} strokeWidth={2.2} /></span>
           <span className="sidebar-brand-copy">
             <strong>digital<span>posyandu</span></strong>
@@ -95,7 +107,7 @@ export function DashboardNavigation() {
         </div>
 
         <nav className="sidebar-nav" aria-label="Navigasi aplikasi">
-          {sections.map((section) => (
+          {visibleSections.map((section) => (
             <div className="sidebar-section" key={section.title}>
               <p className="sidebar-section-title">{section.title}</p>
               {section.items.map((item) => {
@@ -131,9 +143,9 @@ export function DashboardNavigation() {
   );
 }
 
-export function DashboardTopbar() {
+export function DashboardTopbar({ role }: { role: NavRole }) {
   const pathname = usePathname();
-  const allItems = sections.flatMap((section) => section.items);
+  const allItems = navigationFor(role).flatMap((section) => section.items);
   const activeItem = [...allItems].reverse().find((item) => isActive(pathname, item));
   const pageName = activeItem?.label || "Ruang kerja";
 

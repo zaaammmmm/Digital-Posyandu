@@ -1,19 +1,13 @@
 import React from "react";
-import { cookies } from "next/headers";
-import { requirePageSession } from "@/lib/auth/page-session";
+import { requirePageContext } from "@/lib/auth/page-context";
 import { adminDb } from "@/lib/firebase/admin";
 import Link from "next/link";
 import { GrowthChart } from "@/components/charts/GrowthChart";
 
 export default async function ParentDashboard() {
-  const session = await requirePageSession();
-  const cookieStore = await cookies();
-  const posyanduId = cookieStore.get("active_posyandu")?.value;
-  if (!posyanduId) return <div className="posyandu-card p-5">Pilih Posyandu aktif untuk melihat catatan anak.</div>;
-  const membership = await adminDb.collection("memberships").doc(`${session.uid}_${posyanduId}`).get();
-  if (!membership.exists || membership.data()?.status !== "active" || membership.data()?.role !== "parent") {
-    return <div className="posyandu-card p-5">Akses orang tua tidak tersedia pada Posyandu ini.</div>;
-  }
+  // Role comes from the active membership; other roles are redirected to their own home.
+  const session = await requirePageContext(["parent"]);
+  const posyanduId = session.posyanduId;
   const childrenSnap = await adminDb.collection("children").where("posyanduId", "==", posyanduId).where("guardianUids", "array-contains", session.uid).limit(50).get();
   const children = childrenSnap.docs;
   const selected = children[0];

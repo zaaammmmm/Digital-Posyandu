@@ -9,7 +9,7 @@ import { VerifyActions } from "@/components/forms/VerifyActions";
 import { VerificationStatus } from "@/types/verification";
 
 export default async function VerifyVisitDetailPage({ params }: { params: Promise<{ visitId: string }> }) {
-  const ctx = await requirePageContext(["health_worker", "posyandu_admin", "system_admin"]);
+  const ctx = await requirePageContext(["health_worker"]);
   const { visitId } = await params;
   const visitSnap = await adminDb.collection("visits").doc(visitId).get();
   const visit = visitSnap.data();

@@ -4,7 +4,7 @@ import { requireAuth, isAuthError } from "@/lib/auth/server";
 
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, ["parent", "cadre", "posyandu_admin", "system_admin"]);
+  const auth = await requireAuth(req, ["parent", "cadre", "posyandu_admin"]);
   if (isAuthError(auth)) return auth;
   const childId = req.nextUrl.searchParams.get("childId");
   if (!childId) return NextResponse.json({ error: "childId wajib diisi" }, { status: 400 });

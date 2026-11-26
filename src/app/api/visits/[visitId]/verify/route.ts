@@ -9,7 +9,7 @@ import { requireAuth, isAuthError } from "@/lib/auth/server";
 import { validateSummaryProvenance } from "@/lib/ai/summary-provenance";
 
 export async function POST(req: NextRequest, context: { params: Promise<{ visitId: string }> }) {
-  const auth = await requireAuth(req, ["health_worker", "posyandu_admin", "system_admin"]);
+  const auth = await requireAuth(req, ["health_worker"]);
   if (isAuthError(auth)) return auth;
   try {
     const { visitId } = await context.params;

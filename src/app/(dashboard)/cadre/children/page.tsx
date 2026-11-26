@@ -70,6 +70,12 @@ export default async function ChildrenListPage() {
                       + Catat Kunjungan
                     </Link>
                   )}
+                  {canRecord && (
+                    <Link href={`/cadre/children/${c.id}/services/new`}
+                      className="ml-3 text-emerald-700 hover:text-emerald-900 hover:underline font-semibold">
+                      + Imunisasi/Vitamin
+                    </Link>
+                  )}
                 </td>
               </tr>
             ))}
