@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { animate, motion, useInView } from 'framer-motion'
 
 /* ---------- Ikon (stroke) ---------- */
@@ -54,17 +54,18 @@ export function Icon({ n, size = 22, sw = 2, ...p }) {
 const LOGO_SRC = null
 
 export function Logo({ size = 38, light = false, text = true }) {
+  const gid = 'lg' + useId().replace(/:/g, '')
   if (LOGO_SRC) return <img src={LOGO_SRC} height={size} alt="Posify" className="logo-img" />
   return (
     <span className={`logo ${light ? 'logo-light' : ''}`}>
       <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
         <defs>
-          <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stopColor="#F46095" />
             <stop offset="1" stopColor="#ED1566" />
           </linearGradient>
         </defs>
-        <rect width="64" height="64" rx="19" fill={light ? '#fff' : 'url(#lg)'} />
+        <rect width="64" height="64" rx="19" fill={light ? '#fff' : `url(#${gid})`} />
         <path d="M32 47S16 38 16 26a8.5 8.5 0 0 1 16-4 8.5 8.5 0 0 1 16 4c0 12-16 21-16 21z" fill={light ? '#ED1566' : '#fff'} />
       </svg>
       {text && <span className="logo-word">Posify</span>}

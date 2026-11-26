@@ -30,8 +30,8 @@ Letakkan logo di `public/logo.svg`, lalu di `src/components/ui.jsx` ubah `const 
 Logo sementara (hati dalam kotak) otomatis hilang. Jangan lupa ganti `public/favicon.svg`.
 
 ## Animasi & transisi
-- **Transisi halaman (tirai dari bawah)** — `src/context/Transition.jsx`. Dua lapis layar naik dari bawah, rute berganti saat layar menutup, lalu terus naik ke atas. Pakai `<TLink to="...">`. Tambahkan prop `soft` untuk perpindahan tab di dalam aplikasi (fade-slide ringan) supaya tidak terasa berat.
-- **Landing**: headline muncul per kata, parallax mouse pada ponsel & chip, ribbon berjalan, section *"Buku kertas → Posify"* yang dikendalikan scroll (`useScroll`), grafik yang tergambar sendiri, bento fitur dengan visual mini.
+- **Transisi halaman (tirai dari bawah)** — `src/context/Transition.jsx`. Dua lapis layar naik dari bawah dengan sisi lurus (menutup penuh), rute berganti saat layar menutup, lalu terus naik ke atas. Pakai `<TLink to="...">`. Tambahkan prop `soft` untuk perpindahan tab di dalam aplikasi (fade-slide ringan) supaya tidak terasa berat.
+- **Landing**: headline per kata, parallax mouse pada ponsel & chip, section *Alur data* (sticky, dikendalikan scroll: layar ponsel berganti Kader → Bidan → Orang tua), fitur bento sederhana, kartu peran dengan lapisan merah yang menutup dari bawah hanya saat disorot.
 - **Aplikasi**: counter angka, grafik interaktif (ketuk titik), ring progres, typewriter ringkasan, stepper kunjungan, bottom-sheet, kartu verifikasi yang "terbang" saat disahkan, confetti pada sukses simpan.
 - Menghormati `prefers-reduced-motion` (`MotionConfig reducedMotion="user"` + CSS).
 

@@ -9,7 +9,7 @@ const ease = [0.76, 0, 0.24, 1]
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /**
- * Transisi halaman: dua lapis layar naik dari bawah, menutup halaman,
+ * Transisi halaman: dua lapis layar naik dari bawah (sisi lurus), menutup halaman penuh,
  * rute berganti, lalu layar terus naik ke atas dan membuka halaman baru.
  */
 export function TransitionProvider({ children }) {
@@ -24,6 +24,7 @@ export function TransitionProvider({ children }) {
     async (to, afterNav) => {
       if (busy.current || to === pathname + search) return
       busy.current = true
+      try {
       await Promise.all([
         a.start({ y: '0%', transition: { duration: 0.6, ease } }),
         b.start({ y: '0%', transition: { duration: 0.6, ease, delay: 0.12 } }),
@@ -31,7 +32,7 @@ export function TransitionProvider({ children }) {
       ])
       navigate(to)
       afterNav?.()
-      window.scrollTo(0, 0)
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
       await sleep(260)
       await Promise.all([
         t.start({ opacity: 0, transition: { duration: 0.2 } }),
@@ -41,7 +42,11 @@ export function TransitionProvider({ children }) {
       a.set({ y: '100%' })
       b.set({ y: '100%' })
       t.set({ y: 14 })
-      busy.current = false
+      } finally {
+        a.set({ y: '100%' })
+        b.set({ y: '100%' })
+        busy.current = false
+      }
     },
     [pathname, search, navigate, a, b, t]
   )

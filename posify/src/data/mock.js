@@ -64,7 +64,7 @@ export const tickets = [
 ]
 
 export const kids = [
-  { id: 'c1', name: 'Aisyah Putri', sex: 'P', age: 18, reg: 'PSY-0142', last: '12 Nov', status: 'verified', w: 9.0, h: 74.0 },
+  { id: 'c1', name: 'Aisyah Putri', sex: 'P', age: 18, reg: 'PSY-0142', last: '12 Nov', status: 'verified', w: 10.2, h: 78.4 },
   { id: 'c2', name: 'Rafif Pratama', sex: 'L', age: 11, reg: 'PSY-0151', last: '12 Nov', status: 'pending', w: 7.9, h: 70.2 },
   { id: 'c3', name: 'Naura Azzahra', sex: 'P', age: 24, reg: 'PSY-0119', last: '12 Nov', status: 'pending', w: 10.4, h: 80.5 },
   { id: 'c4', name: 'Bima Saputra', sex: 'L', age: 8, reg: 'PSY-0163', last: '—', status: 'none', w: 7.0, h: 66.0 },

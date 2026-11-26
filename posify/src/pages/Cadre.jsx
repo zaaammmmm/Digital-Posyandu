@@ -133,7 +133,7 @@ export function CadreKids() {
             </motion.li>
           ))}
         </AnimatePresence>
-        {shown.length === 0 && <p className="empty">Tidak ada anak yang cocok.</p>}
+        {shown.length === 0 && <li className="empty">Tidak ada anak yang cocok.</li>}
       </motion.ul>
 
       <AnimatePresence>
@@ -219,7 +219,7 @@ export function CadreVisit() {
     if (h < kid.h) flags.push('Tinggi lebih rendah dari kunjungan sebelumnya — periksa ulang')
   }
   const toggle = (s) => setSvc((l) => (l.includes(s) ? l.filter((x) => x !== s) : [...l, s]))
-  const reset = () => { setStep(0); setKid(null); setSvc([]); setDone(null) }
+  const reset = () => { setStep(0); setKid(null); setSvc([]); setMtype('Berdiri'); setDone(null) }
   const send = (status) => { setDone(status); toast(status === 'draft' ? 'Disimpan sebagai draft' : 'Terkirim untuk verifikasi') }
 
   if (done) {
@@ -379,7 +379,7 @@ export function CadreVerify() {
           ))}
         </AnimatePresence>
         {shown.length === 0 && (
-          <motion.p className="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><Icon n="check" size={28} sw={2.5} /><br />Semua beres di sini.</motion.p>
+          <motion.li className="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><Icon n="check" size={28} sw={2.5} /><br />Semua beres di sini.</motion.li>
         )}
       </ul>
     </div>

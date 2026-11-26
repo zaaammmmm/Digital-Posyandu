@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useLocation, useOutlet } from 'react-router-dom'
 import { TLink } from '../context/Transition.jsx'
@@ -27,6 +28,7 @@ export default function Shell({ kind }) {
   const outlet = useOutlet()
   const { user, logout, role } = useAuth()
   const items = NAV[kind]
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }) }, [pathname])
   const isActive = (i) => (i.end ? pathname === i.to : pathname.startsWith(i.to))
 
   return (
