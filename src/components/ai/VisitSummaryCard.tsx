@@ -9,7 +9,7 @@ interface VisitSummaryCardProps {
 
 export const VisitSummaryCard: React.FC<VisitSummaryCardProps> = ({
   summaryText,
-  sourceDoc = "Buku KIA Kemenkes RI 2024",
+  sourceDoc,
   generatedAt,
   safetyStatus,
 }) => {
@@ -29,7 +29,7 @@ export const VisitSummaryCard: React.FC<VisitSummaryCardProps> = ({
       </div>
       <p className="text-sm leading-7 text-slate-700">{summaryText}</p>
       <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-        <span>Sumber edukasi: <strong className="font-semibold text-slate-700">{sourceDoc}</strong></span>
+        <span>Sumber edukasi: <strong className="font-semibold text-slate-700">{sourceDoc || "Tidak ada materi edukasi terlampir"}</strong></span>
         <span>Diperbarui: {new Date(generatedAt).toLocaleDateString("id-ID")}</span>
       </div>
       <div className="rounded-xl bg-slate-50 px-3.5 py-3 text-xs leading-relaxed text-slate-600">

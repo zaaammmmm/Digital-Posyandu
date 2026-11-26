@@ -44,12 +44,30 @@ export async function POST(req: NextRequest, context: { params: Promise<{ visitI
     await writeAuditLog({ actorUserId: auth.uid, action: "VERIFY_VISIT", resourceType: "visit",
       resourceId: visitId, beforeSnapshot: visit, afterSnapshot: { verificationStatus: "verified", verifiedBy: auth.uid, version: nextVersion }, reason: "Verifikasi oleh petugas berwenang", posyanduId: auth.posyanduId });
 
+    // Previous verified, non-superseded measurement of the same child (numeric comparison only).
+    const prevSnap = await adminDb.collection("anthropometry_measurements")
+      .where("childId", "==", visit.childId).where("posyanduId", "==", auth.posyanduId)
+      .where("verificationStatus", "==", "verified").get();
+    const prevDoc = prevSnap.docs
+      .filter(d => !d.data().supersededAt && d.data().visitId !== visitId
+        && String(d.data().measuredAt || "") < String(meas.measuredAt || ""))
+      .sort((a, b) => String(b.data().measuredAt || "").localeCompare(String(a.data().measuredAt || "")))[0];
+    let previousMeasurement: { visit_date: string; weight_kg: number; length_height_cm: number } | null = null;
+    if (prevDoc) {
+      const prevVisit = await adminDb.collection("visits").doc(String(prevDoc.data().visitId)).get();
+      const prevDate = prevVisit.exists ? prevVisit.data()?.visitDate : null;
+      if (typeof prevDate === "string") {
+        previousMeasurement = { visit_date: prevDate, weight_kg: Number(prevDoc.data().weightKg),
+          length_height_cm: Number(prevDoc.data().lengthHeightCm) };
+      }
+    }
+
     const snippets = await retrieveApprovedKnowledge("pola makan tumbuh kembang edukasi Posyandu", 3);
     const safePayload = buildSafeAiPayload({
       age_months: Number(meas.ageMonths), sex_for_reference: meas.sex,
       visit_date: visit.visitDate,
       measurements: { weight_kg: meas.weightKg, length_height_cm: meas.lengthHeightCm, measurement_type: meas.measurementType },
-      previous_measurement: null,
+      previous_measurement: previousMeasurement,
       validated_assessments: assessments.map(a => ({ indicator: a.indicator,
         classification_code: a.classificationCode, reference_version: a.referenceVersion,
         needs_verification: a.needsVerification })),
@@ -72,7 +90,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ visitI
     }
     const summaryRef = await adminDb.collection("ai_summaries").add({
       posyanduId: auth.posyanduId, guardianUid: visit.guardianUid || null,
-      childId: visit.childId, ...provenance, generatedText: aiRes.text,
+      ...provenance, generatedText: aiRes.text,
       reviewStatus: "auto_checked",
     });
     return NextResponse.json({ success: true, visitId, summaryId: summaryRef.id,

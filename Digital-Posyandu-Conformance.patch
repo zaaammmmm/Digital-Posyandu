@@ -1,0 +1,1530 @@
+diff --git a/docs/CONFORMANCE-PATCH-NOTES.md b/docs/CONFORMANCE-PATCH-NOTES.md
+new file mode 100644
+index 0000000..96e3c03
+--- /dev/null
++++ b/docs/CONFORMANCE-PATCH-NOTES.md
+@@ -0,0 +1,27 @@
++# Conformance Patch — Catatan Perubahan
++
++Patch ini menyelaraskan aplikasi dengan `docs/01–07`. Ia tidak menggantikan validasi lapangan,
++persetujuan tenaga kesehatan, atau penilaian privasi.
++
++## Diperbaiki
++- `src/lib/ai/summary-provenance.ts` ditambahkan (sebelumnya diimpor tetapi tidak ada, sehingga build gagal).
++- `tsconfig.json`: `allowImportingTsExtensions` agar `npm run typecheck` memeriksa file test.
++- `requireAuth` menerima cookie sesi (`__session` + `active_posyandu`) selain Bearer token. Penulisan berbasis
++  cookie memeriksa `Origin` sama dengan `Host`. Sebelumnya halaman klien memanggil API tanpa token sehingga selalu 401.
++- Halaman yang tadinya hardcode kini membaca data tenant dari Firestore dan memakai `requirePageContext`
++  (peran dari membership server-side): antrean verifikasi, detail verifikasi, dashboard kader, daftar anak,
++  audit log, status reviewer, rekap (pilih periode), detail anak orang tua.
++- Klaim yang tidak didukung dihapus: Z-score contoh pada halaman verifikasi, "kemenkes-2024.1 Terverifikasi & Terkunci"
++  pada reviewer, dan sumber bawaan "Buku KIA Kemenkes RI 2024" pada kartu ringkasan.
++- Registrasi anak memanggil `POST /api/children` (sebelumnya hanya `alert`).
++- Orang tua: riwayat kunjungan terverifikasi, imunisasi tercatat, jadwal (hanya dari katalog yang disahkan),
++  ringkasan AI, dan status permintaan koreksi.
++- Alur koreksi: `PATCH /api/corrections/{id}` + halaman `/health-worker/corrections`.
++- Penolakan verifikasi dengan alasan wajib: `POST /api/visits/{id}/reject` (status `needs_correction`).
++- Ringkasan AI memuat perbandingan numerik dengan kunjungan terverifikasi sebelumnya.
++
++## Masih terbuka (tidak dikerjakan patch ini)
++- Dataset WHO resmi + golden test; katalog imunisasi resmi; antarmuka reviewer untuk mengelolanya (US-T02).
++- Pengingat/notifikasi (FR-11); pemantauan tumbuh kembang (API/halaman); ekspor PDF; grafik panjang/tinggi.
++- Sinkronisasi draft offline (`draft-storage.ts` belum dipakai); halaman administrasi masih statis.
++- Pencarian anak, pengujian Firebase Emulator Rules, backup/restore, uji kegunaan dengan kader.
+diff --git a/src/app/(dashboard)/admin/audit-logs/page.tsx b/src/app/(dashboard)/admin/audit-logs/page.tsx
+index f41ed5f..07bbe32 100644
+--- a/src/app/(dashboard)/admin/audit-logs/page.tsx
++++ b/src/app/(dashboard)/admin/audit-logs/page.tsx
+@@ -1,24 +1,14 @@
+ import React from "react";
++import { adminDb } from "@/lib/firebase/admin";
++import { rowsOf } from "@/lib/data/rows";
++import { requirePageContext } from "@/lib/auth/page-context";
+ 
+-export default function AuditLogsPage() {
+-  const sampleLogs = [
+-    {
+-      id: "log-1",
+-      action: "VERIFY_VISIT",
+-      actor: "bidan-desa-1",
+-      resource: "visit/visit-demo-1",
+-      reason: "Verifikasi data kunjungan oleh petugas berwenang",
+-      time: "2026-11-25 10:15",
+-    },
+-    {
+-      id: "log-2",
+-      action: "CORRECT_VISIT_DATA",
+-      actor: "bidan-desa-1",
+-      resource: "visit/visit-demo-0",
+-      reason: "Koreksi salah ketik tinggi badan dari 71 menjadi 74 cm",
+-      time: "2026-11-20 14:00",
+-    },
+-  ];
++export default async function AuditLogsPage() {
++  const ctx = await requirePageContext(["posyandu_admin", "health_worker", "system_admin"]);
++  const snap = await adminDb.collection("audit_logs").where("posyanduId", "==", ctx.posyanduId).limit(300).get();
++  const logs = rowsOf(snap)
++    .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))
++    .slice(0, 100);
+ 
+   return (
+     <div className="space-y-5">
+@@ -26,7 +16,7 @@ export default function AuditLogsPage() {
+         <div>
+           <h2 className="posyandu-page-title">Jejak Audit Sistem (Audit Trail)</h2>
+           <p className="posyandu-page-subtitle">
+-            Catatan riwayat perubahan dan verifikasi yang tidak dapat dihapus
++            100 aktivitas terbaru pada Posyandu aktif. Log hanya dapat ditulis oleh server dan tidak dapat diubah dari klien.
+           </p>
+         </div>
+       </div>
+@@ -36,23 +26,20 @@ export default function AuditLogsPage() {
+             <tr>
+               <th className="posyandu-th">Waktu</th>
+               <th className="posyandu-th">Aksi</th>
+-              <th className="posyandu-th">Petugas</th>
++              <th className="posyandu-th">Petugas (UID)</th>
+               <th className="posyandu-th">Resource</th>
+-              <th className="posyandu-th">Alasan Koreksi</th>
++              <th className="posyandu-th">Alasan</th>
+             </tr>
+           </thead>
+           <tbody className="divide-y divide-slate-100">
+-            {sampleLogs.map((l) => (
++            {logs.length === 0 && <tr><td className="posyandu-td text-slate-500" colSpan={5}>Belum ada aktivitas tercatat.</td></tr>}
++            {logs.map(l => (
+               <tr key={l.id} className="hover:bg-slate-50/80 transition-colors">
+-                <td className="posyandu-td font-mono text-xs text-slate-600 whitespace-nowrap">
+-                  {l.time}
+-                </td>
+-                <td className="posyandu-td font-semibold text-emerald-800 whitespace-nowrap">
+-                  {l.action}
+-                </td>
+-                <td className="posyandu-td whitespace-nowrap">{l.actor}</td>
+-                <td className="posyandu-td font-mono text-xs text-slate-500">{l.resource}</td>
+-                <td className="posyandu-td text-slate-700">{l.reason}</td>
++                <td className="posyandu-td font-mono text-xs text-slate-600 whitespace-nowrap">{String(l.timestamp).replace("T", " ").slice(0, 16)}</td>
++                <td className="posyandu-td font-semibold text-emerald-800 whitespace-nowrap">{String(l.action)}</td>
++                <td className="posyandu-td font-mono text-xs whitespace-nowrap">{String(l.actorUserId)}</td>
++                <td className="posyandu-td font-mono text-xs text-slate-500">{String(l.resourceType)}/{String(l.resourceId)}</td>
++                <td className="posyandu-td text-slate-700">{String(l.reason || "")}</td>
+               </tr>
+             ))}
+           </tbody>
+diff --git a/src/app/(dashboard)/admin/reports/page.tsx b/src/app/(dashboard)/admin/reports/page.tsx
+index bb8fce3..7c96365 100644
+--- a/src/app/(dashboard)/admin/reports/page.tsx
++++ b/src/app/(dashboard)/admin/reports/page.tsx
+@@ -1,25 +1,37 @@
+ import React from "react";
+-import { Button } from "@/components/ui/Button";
++import { requirePageContext } from "@/lib/auth/page-context";
++import { todayInJakarta } from "@/lib/data/child-lookup";
+ 
+-export default function ReportsPage() {
++export default async function ReportsPage() {
++  await requirePageContext(["posyandu_admin", "system_admin"]);
++  const today = todayInJakarta();
++  const monthStart = `${today.slice(0, 8)}01`;
+   return (
+     <div className="space-y-5">
+       <div className="posyandu-page-header">
+         <div>
+           <h2 className="posyandu-page-title">Rekapitulasi Layanan Posyandu</h2>
+           <p className="posyandu-page-subtitle">
+-            Laporan rekapitulasi dibuat secara agregat untuk melindungi privasi data pribadi balita.
++            Laporan dibuat secara agregat untuk melindungi privasi data pribadi balita. Setiap ekspor dicatat pada audit log.
+           </p>
+         </div>
+       </div>
+-      <div className="posyandu-card p-5 sm:p-6 space-y-4">
+-        <h4 className="font-bold text-sm sm:text-base text-slate-900">
+-          Rekap Bulan Berjalan (November 2026)
+-        </h4>
+-        <a href="/api/reports/export?posyanduId=posyandu-tempak" download>
+-          <Button>Unduh Rekapitulasi (CSV)</Button>
+-        </a>
+-      </div>
++      <form method="GET" action="/api/reports/export" className="posyandu-card p-5 sm:p-6 space-y-4">
++        <h4 className="font-bold text-sm sm:text-base text-slate-900">Pilih periode rekap</h4>
++        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
++          <div>
++            <label className="posyandu-label" htmlFor="from">Dari tanggal</label>
++            <input id="from" name="from" type="date" required defaultValue={monthStart} className="posyandu-input" />
++          </div>
++          <div>
++            <label className="posyandu-label" htmlFor="to">Sampai tanggal</label>
++            <input id="to" name="to" type="date" required defaultValue={today} className="posyandu-input" />
++          </div>
++        </div>
++        <button type="submit" className="inline-flex items-center justify-center rounded-xl bg-[#176f4f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#105b40]">
++          Unduh Rekapitulasi (CSV)
++        </button>
++      </form>
+     </div>
+   );
+ }
+diff --git a/src/app/(dashboard)/cadre/children/[childId]/visits/new/page.tsx b/src/app/(dashboard)/cadre/children/[childId]/visits/new/page.tsx
+index 0d906d2..ccca0cd 100644
+--- a/src/app/(dashboard)/cadre/children/[childId]/visits/new/page.tsx
++++ b/src/app/(dashboard)/cadre/children/[childId]/visits/new/page.tsx
+@@ -1,5 +1,6 @@
+ import React from "react";
+ import { VisitForm } from "@/components/forms/VisitForm";
++import { requirePageContext } from "@/lib/auth/page-context";
+ 
+ export default async function NewVisitPage({
+   params,
+@@ -7,6 +8,7 @@ export default async function NewVisitPage({
+   params: Promise<{ childId: string }>;
+ }) {
+   const { childId } = await params;
++  const ctx = await requirePageContext(["cadre", "health_worker"]);
+ 
+   return (
+     <div className="max-w-lg mx-auto space-y-5">
+@@ -16,7 +18,7 @@ export default async function NewVisitPage({
+           <p className="posyandu-page-subtitle">ID Anak: {childId}</p>
+         </div>
+       </div>
+-      <VisitForm childId={childId} posyanduId="posyandu-pilot-tempak" />
++      <VisitForm childId={childId} posyanduId={ctx.posyanduId} />
+     </div>
+   );
+ }
+diff --git a/src/app/(dashboard)/cadre/children/new/page.tsx b/src/app/(dashboard)/cadre/children/new/page.tsx
+index 49708d7..edb7824 100644
+--- a/src/app/(dashboard)/cadre/children/new/page.tsx
++++ b/src/app/(dashboard)/cadre/children/new/page.tsx
+@@ -9,13 +9,33 @@ export default function NewChildPage() {
+   const [name, setName] = useState("");
+   const [dob, setDob] = useState("");
+   const [sex, setSex] = useState<"male" | "female">("male");
+-  const [guardianName, setGuardianName] = useState("");
+-  const [contact, setContact] = useState("");
++  const [registrationNumber, setRegistrationNumber] = useState("");
++  const [guardianUids, setGuardianUids] = useState("");
++  const [loading, setLoading] = useState(false);
++  const [error, setError] = useState("");
+ 
+-  const handleSubmit = (e: React.FormEvent) => {
++  const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+-    alert("Data anak dan wali tersimpan.");
+-    router.push("/cadre/children");
++    setLoading(true);
++    setError("");
++    try {
++      const res = await fetch("/api/children", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          registrationNumber, fullName: name, dateOfBirth: dob, sex,
++          guardianUids: guardianUids.split(",").map(v => v.trim()).filter(Boolean),
++        }),
++      });
++      const data = await res.json().catch(() => ({}));
++      if (!res.ok) throw new Error(data.error || "Data anak gagal disimpan.");
++      router.push("/cadre/children");
++      router.refresh();
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "Data anak gagal disimpan.");
++    } finally {
++      setLoading(false);
++    }
+   };
+ 
+   return (
+@@ -27,6 +47,16 @@ export default function NewChildPage() {
+         </p>
+       </div>
+       <form onSubmit={handleSubmit} className="space-y-4">
++        <div>
++          <label className="posyandu-label">Nomor Registrasi Internal</label>
++          <input
++            required
++            value={registrationNumber}
++            onChange={(e) => setRegistrationNumber(e.target.value)}
++            placeholder="Misal: REG-001"
++            className="posyandu-input"
++          />
++        </div>
+         <div>
+           <label className="posyandu-label">Nama Lengkap Anak</label>
+           <input
+@@ -51,7 +81,7 @@ export default function NewChildPage() {
+             <label className="posyandu-label">Jenis Kelamin</label>
+             <select
+               value={sex}
+-              onChange={(e: any) => setSex(e.target.value)}
++              onChange={(e) => setSex(e.target.value as "male" | "female")}
+               className="posyandu-input"
+             >
+               <option value="male">Laki-laki</option>
+@@ -60,26 +90,18 @@ export default function NewChildPage() {
+           </div>
+         </div>
+         <div>
+-          <label className="posyandu-label">Nama Orang Tua / Wali</label>
++          <label className="posyandu-label">UID Akun Orang Tua/Wali (opsional, pisahkan dengan koma)</label>
+           <input
+-            required
+-            value={guardianName}
+-            onChange={(e) => setGuardianName(e.target.value)}
+-            className="posyandu-input"
+-          />
+-        </div>
+-        <div>
+-          <label className="posyandu-label">Kontak Operasional</label>
+-          <input
+-            required
+-            value={contact}
+-            onChange={(e) => setContact(e.target.value)}
+-            placeholder="Nomor ponsel wali"
++            value={guardianUids}
++            onChange={(e) => setGuardianUids(e.target.value)}
++            placeholder="UID akun parent aktif pada Posyandu ini"
+             className="posyandu-input"
+           />
++          <p className="mt-1 text-xs text-slate-500">Nama dan kontak wali tidak disimpan pada tahap ini (minimisasi data).</p>
+         </div>
+-        <Button type="submit" className="w-full mt-2">
+-          Daftarkan Anak
++        {error && <p role="alert" className="text-xs font-medium text-rose-800 bg-rose-50 border border-rose-200 px-3.5 py-2.5 rounded-xl">{error}</p>}
++        <Button type="submit" disabled={loading} className="w-full mt-2">
++          {loading ? "Menyimpan..." : "Daftarkan Anak"}
+         </Button>
+       </form>
+     </div>
+diff --git a/src/app/(dashboard)/cadre/children/page.tsx b/src/app/(dashboard)/cadre/children/page.tsx
+index 2fe653c..31ec4b9 100644
+--- a/src/app/(dashboard)/cadre/children/page.tsx
++++ b/src/app/(dashboard)/cadre/children/page.tsx
+@@ -1,12 +1,31 @@
+ import React from "react";
+ import Link from "next/link";
++import { adminDb } from "@/lib/firebase/admin";
++import { rowsOf } from "@/lib/data/rows";
++import { requirePageContext } from "@/lib/auth/page-context";
++import { calculateAgeMonths } from "@/lib/growth/age";
++import { todayInJakarta } from "@/lib/data/child-lookup";
+ 
+-export default function ChildrenListPage() {
+-  const children = [
+-    { id: "c1", reg: "REG-001", name: "Muhammad Rayyan", age: "18 Bulan", status: "Aktif" },
+-    { id: "c2", reg: "REG-002", name: "Aisyah Zahra", age: "8 Bulan", status: "Aktif" },
+-    { id: "c3", reg: "REG-003", name: "Danendra Putra", age: "24 Bulan", status: "Perlu Verifikasi" },
+-  ];
++const STATUS_LABEL: Record<string, string> = {
++  active: "Aktif", archived: "Diarsipkan", needs_verification: "Perlu Verifikasi",
++};
++
++function ageLabel(dateOfBirth: string) {
++  try {
++    const months = calculateAgeMonths(dateOfBirth, todayInJakarta());
++    return months < 24 ? `${months} bulan` : `${Math.floor(months / 12)} th ${months % 12} bln`;
++  } catch {
++    return "-";
++  }
++}
++
++export default async function ChildrenListPage() {
++  const ctx = await requirePageContext(["cadre", "health_worker", "posyandu_admin"]);
++  const snap = await adminDb.collection("children").where("posyanduId", "==", ctx.posyanduId).limit(200).get();
++  const children = rowsOf(snap)
++    .sort((a, b) => String(a.registrationNumber).localeCompare(String(b.registrationNumber)));
++  const canRegister = ctx.role === "cadre" || ctx.role === "posyandu_admin";
++  const canRecord = ctx.role === "cadre" || ctx.role === "health_worker";
+ 
+   return (
+     <div className="space-y-5">
+@@ -15,6 +34,9 @@ export default function ChildrenListPage() {
+           <h2 className="posyandu-page-title">Daftar Anak Terdaftar</h2>
+           <p className="posyandu-page-subtitle">Pilih data anak untuk mencatat kunjungan baru</p>
+         </div>
++        {canRegister && (
++          <Link href="/cadre/children/new" className="text-sm font-semibold text-emerald-700 hover:underline">+ Daftarkan Anak</Link>
++        )}
+       </div>
+       <div className="posyandu-table-wrap">
+         <table className="posyandu-table">
+@@ -28,23 +50,26 @@ export default function ChildrenListPage() {
+             </tr>
+           </thead>
+           <tbody className="divide-y divide-slate-100">
+-            {children.map((c) => (
++            {children.length === 0 && (
++              <tr><td className="posyandu-td text-slate-500" colSpan={5}>Belum ada anak terdaftar pada Posyandu ini.</td></tr>
++            )}
++            {children.map(c => (
+               <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
+-                <td className="posyandu-td font-mono text-xs text-slate-600">{c.reg}</td>
+-                <td className="posyandu-td font-semibold text-slate-900">{c.name}</td>
+-                <td className="posyandu-td">{c.age}</td>
++                <td className="posyandu-td font-mono text-xs text-slate-600">{String(c.registrationNumber)}</td>
++                <td className="posyandu-td font-semibold text-slate-900">{String(c.fullName)}</td>
++                <td className="posyandu-td">{ageLabel(String(c.dateOfBirth))}</td>
+                 <td className="posyandu-td">
+                   <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+-                    {c.status}
++                    {STATUS_LABEL[String(c.recordStatus)] || String(c.recordStatus)}
+                   </span>
+                 </td>
+                 <td className="posyandu-td">
+-                  <Link
+-                    href={`/cadre/children/${c.id}/visits/new`}
+-                    className="text-emerald-700 hover:text-emerald-900 hover:underline font-semibold"
+-                  >
+-                    + Catat Kunjungan
+-                  </Link>
++                  {canRecord && (
++                    <Link href={`/cadre/children/${c.id}/visits/new`}
++                      className="text-emerald-700 hover:text-emerald-900 hover:underline font-semibold">
++                      + Catat Kunjungan
++                    </Link>
++                  )}
+                 </td>
+               </tr>
+             ))}
+diff --git a/src/app/(dashboard)/cadre/page.tsx b/src/app/(dashboard)/cadre/page.tsx
+index 089e93f..a7c2165 100644
+--- a/src/app/(dashboard)/cadre/page.tsx
++++ b/src/app/(dashboard)/cadre/page.tsx
+@@ -1,8 +1,22 @@
+ import React from "react";
+ import Link from "next/link";
+ import { Button } from "@/components/ui/Button";
++import { adminDb } from "@/lib/firebase/admin";
++import { requirePageContext } from "@/lib/auth/page-context";
++import { todayInJakarta } from "@/lib/data/child-lookup";
+ 
+-export default function CadreDashboard() {
++export default async function CadreDashboard() {
++  const ctx = await requirePageContext(["cadre", "health_worker", "posyandu_admin"]);
++  const visits = adminDb.collection("visits").where("posyanduId", "==", ctx.posyanduId);
++  const [children, today, pending, needsCorrection, corrections] = await Promise.all([
++    adminDb.collection("children").where("posyanduId", "==", ctx.posyanduId).count().get(),
++    visits.where("visitDate", "==", todayInJakarta()).count().get(),
++    visits.where("verificationStatus", "==", "pending_verification").count().get(),
++    visits.where("verificationStatus", "==", "needs_correction").count().get(),
++    adminDb.collection("correction_requests").where("posyanduId", "==", ctx.posyanduId)
++      .where("status", "==", "pending_review").count().get(),
++  ]);
++  const followUps = needsCorrection.data().count + corrections.data().count;
+   return (
+     <div className="space-y-6">
+       <div className="posyandu-page-header">
+@@ -20,19 +34,19 @@ export default function CadreDashboard() {
+       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+         <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-slate-400">
+           <p className="text-xs font-medium text-slate-500">Sasaran Terdaftar</p>
+-          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1.5">45</p>
++          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1.5">{children.data().count}</p>
+         </div>
+         <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-emerald-600">
+-          <p className="text-xs font-medium text-slate-500">Hadir Hari Ini</p>
+-          <p className="text-2xl sm:text-3xl font-bold text-emerald-700 mt-1.5">28</p>
++          <p className="text-xs font-medium text-slate-500">Kunjungan Hari Ini</p>
++          <p className="text-2xl sm:text-3xl font-bold text-emerald-700 mt-1.5">{today.data().count}</p>
+         </div>
+         <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-amber-500">
+           <p className="text-xs font-medium text-slate-500">Menunggu Verifikasi</p>
+-          <p className="text-2xl sm:text-3xl font-bold text-amber-700 mt-1.5">5</p>
++          <p className="text-2xl sm:text-3xl font-bold text-amber-700 mt-1.5">{pending.data().count}</p>
+         </div>
+         <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-rose-500">
+           <p className="text-xs font-medium text-slate-500">Tindak Lanjut</p>
+-          <p className="text-2xl sm:text-3xl font-bold text-rose-700 mt-1.5">2</p>
++          <p className="text-2xl sm:text-3xl font-bold text-rose-700 mt-1.5">{followUps}</p>
+         </div>
+       </div>
+ 
+diff --git a/src/app/(dashboard)/health-worker/corrections/page.tsx b/src/app/(dashboard)/health-worker/corrections/page.tsx
+new file mode 100644
+index 0000000..bb74d63
+--- /dev/null
++++ b/src/app/(dashboard)/health-worker/corrections/page.tsx
+@@ -0,0 +1,48 @@
++import React from "react";
++import Link from "next/link";
++import { adminDb } from "@/lib/firebase/admin";
++import { rowsOf } from "@/lib/data/rows";
++import { requirePageContext } from "@/lib/auth/page-context";
++import { CorrectionReviewActions } from "@/components/forms/CorrectionReviewActions";
++
++const STATUS_LABEL: Record<string, string> = {
++  pending_review: "Menunggu tinjauan",
++  accepted_pending_correction: "Diterima, menunggu koreksi data",
++  rejected: "Ditolak",
++};
++
++export default async function CorrectionQueuePage() {
++  const ctx = await requirePageContext(["health_worker", "posyandu_admin", "system_admin"]);
++  const snap = await adminDb.collection("correction_requests").where("posyanduId", "==", ctx.posyanduId).limit(100).get();
++  const items = rowsOf(snap)
++    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
++
++  return (
++    <div className="space-y-5">
++      <div className="posyandu-page-header">
++        <div>
++          <h1 className="posyandu-page-title">Permintaan Koreksi dari Wali</h1>
++          <p className="posyandu-page-subtitle">
++            Keputusan di sini hanya mencatat tinjauan. Perubahan nilai dilakukan melalui alur koreksi berversi dan tercatat di audit.
++          </p>
++        </div>
++        <Link href="/health-worker" className="text-sm font-semibold text-emerald-700 hover:underline">Antrean verifikasi</Link>
++      </div>
++      <div className="space-y-3">
++        {items.length === 0 && <div className="posyandu-card p-5 text-sm text-slate-600">Belum ada permintaan koreksi.</div>}
++        {items.map(item => (
++          <div key={item.id} className="posyandu-card p-5 space-y-3">
++            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
++              <span>Kunjungan: <Link className="font-mono text-emerald-700 hover:underline" href={`/health-worker/verifications/${String(item.visitId)}`}>{String(item.visitId)}</Link></span>
++              <span>{String(item.createdAt).slice(0, 10)} &bull; {STATUS_LABEL[String(item.status)] || String(item.status)}</span>
++            </div>
++            <p className="text-sm text-slate-800">{String(item.reason)}</p>
++            {item.status === "pending_review"
++              ? <CorrectionReviewActions requestId={item.id} />
++              : typeof item.reviewNote === "string" && <p className="text-xs text-slate-600">Catatan petugas: {item.reviewNote}</p>}
++          </div>
++        ))}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/app/(dashboard)/health-worker/page.tsx b/src/app/(dashboard)/health-worker/page.tsx
+index 7bf2ed8..e1676ea 100644
+--- a/src/app/(dashboard)/health-worker/page.tsx
++++ b/src/app/(dashboard)/health-worker/page.tsx
+@@ -1,8 +1,32 @@
+ import React from "react";
+ import Link from "next/link";
+ import { StatusBadge } from "@/components/ui/Badge";
++import { adminDb } from "@/lib/firebase/admin";
++import { rowsOf } from "@/lib/data/rows";
++import { requirePageContext } from "@/lib/auth/page-context";
++import { lookupChildLabels } from "@/lib/data/child-lookup";
++
++const STAFF = ["health_worker", "posyandu_admin", "system_admin"] as const;
++
++export default async function HealthWorkerDashboard() {
++  const ctx = await requirePageContext([...STAFF]);
++  const [visitSnap, measSnap, correctionCount] = await Promise.all([
++    adminDb.collection("visits").where("posyanduId", "==", ctx.posyanduId)
++      .where("verificationStatus", "==", "pending_verification").limit(100).get(),
++    adminDb.collection("anthropometry_measurements").where("posyanduId", "==", ctx.posyanduId)
++      .where("verificationStatus", "==", "pending_verification").limit(300).get(),
++    adminDb.collection("correction_requests").where("posyanduId", "==", ctx.posyanduId)
++      .where("status", "==", "pending_review").count().get(),
++  ]);
++  const visits = rowsOf(visitSnap)
++    .sort((a, b) => String(a.visitDate).localeCompare(String(b.visitDate)));
++  const labels = await lookupChildLabels(ctx.posyanduId, visits.map(v => String(v.childId)));
++  const measurementByVisit = new Map<string, Record<string, unknown>>();
++  for (const d of measSnap.docs) {
++    const m = d.data();
++    if (!m.supersededAt) measurementByVisit.set(String(m.visitId), m);
++  }
+ 
+-export default function HealthWorkerDashboard() {
+   return (
+     <div className="space-y-5">
+       <div className="posyandu-page-header">
+@@ -12,6 +36,9 @@ export default function HealthWorkerDashboard() {
+             Periksa validitas hasil pengukuran sebelum pengesahan dan pembuatan ringkasan otomatis.
+           </p>
+         </div>
++        <Link href="/health-worker/corrections" className="text-sm font-semibold text-emerald-700 hover:underline">
++          Permintaan koreksi ({correctionCount.data().count})
++        </Link>
+       </div>
+ 
+       <div className="posyandu-table-wrap">
+@@ -26,22 +53,30 @@ export default function HealthWorkerDashboard() {
+             </tr>
+           </thead>
+           <tbody className="divide-y divide-slate-100">
+-            <tr className="hover:bg-slate-50/80 transition-colors">
+-              <td className="posyandu-td whitespace-nowrap">25 Nov 2026</td>
+-              <td className="posyandu-td font-semibold text-slate-900">Muhammad Rayyan</td>
+-              <td className="posyandu-td">BB: 10.2 kg &bull; TB: 78.4 cm</td>
+-              <td className="posyandu-td">
+-                <StatusBadge status="pending_verification" />
+-              </td>
+-              <td className="posyandu-td">
+-                <Link
+-                  href="/health-worker/verifications/visit-demo-1"
+-                  className="text-emerald-700 hover:text-emerald-900 hover:underline font-semibold"
+-                >
+-                  Tinjau & Validasi
+-                </Link>
+-              </td>
+-            </tr>
++            {visits.length === 0 && (
++              <tr><td className="posyandu-td text-slate-500" colSpan={5}>Tidak ada kunjungan yang menunggu verifikasi.</td></tr>
++            )}
++            {visits.map(v => {
++              const m = measurementByVisit.get(v.id);
++              const flags = Array.isArray(m?.qualityFlags) ? (m!.qualityFlags as string[]) : [];
++              return (
++                <tr key={v.id} className="hover:bg-slate-50/80 transition-colors">
++                  <td className="posyandu-td whitespace-nowrap">{String(v.visitDate)}</td>
++                  <td className="posyandu-td font-semibold text-slate-900">{labels.get(String(v.childId))?.fullName || "-"}</td>
++                  <td className="posyandu-td">
++                    {m ? <>BB: {String(m.weightKg)} kg &bull; TB/PB: {String(m.lengthHeightCm)} cm</> : "Pengukuran tidak ditemukan"}
++                    {flags.length > 0 && <span className="ml-2 text-xs text-amber-700">({flags.length} penanda perlu diperiksa)</span>}
++                  </td>
++                  <td className="posyandu-td"><StatusBadge status="pending_verification" /></td>
++                  <td className="posyandu-td">
++                    <Link href={`/health-worker/verifications/${v.id}`}
++                      className="text-emerald-700 hover:text-emerald-900 hover:underline font-semibold">
++                      Tinjau &amp; Validasi
++                    </Link>
++                  </td>
++                </tr>
++              );
++            })}
+           </tbody>
+         </table>
+       </div>
+diff --git a/src/app/(dashboard)/health-worker/verifications/[visitId]/page.tsx b/src/app/(dashboard)/health-worker/verifications/[visitId]/page.tsx
+index 5898bb9..0374069 100644
+--- a/src/app/(dashboard)/health-worker/verifications/[visitId]/page.tsx
++++ b/src/app/(dashboard)/health-worker/verifications/[visitId]/page.tsx
+@@ -1,74 +1,63 @@
+-"use client";
++import React from "react";
++import Link from "next/link";
++import { notFound } from "next/navigation";
++import { adminDb } from "@/lib/firebase/admin";
++import { requirePageContext } from "@/lib/auth/page-context";
++import { lookupChildLabels } from "@/lib/data/child-lookup";
++import { StatusBadge } from "@/components/ui/Badge";
++import { VerifyActions } from "@/components/forms/VerifyActions";
++import { VerificationStatus } from "@/types/verification";
+ 
+-import React, { useState } from "react";
+-import { useParams, useRouter } from "next/navigation";
+-import { Button } from "@/components/ui/Button";
+-
+-export default function VerifyVisitDetailPage() {
+-  const params = useParams();
+-  const router = useRouter();
+-  const [loading, setLoading] = useState(false);
+-  const [status, setStatus] = useState("");
+-
+-  const handleVerify = async () => {
+-    setLoading(true);
+-    try {
+-      const res = await fetch(`/api/visits/${params.visitId}/verify`, {
+-        method: "POST",
+-        headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({
+-          verifierId: "bidan-desa-1",
+-          ageMonths: 18,
+-          sex: "male",
+-        }),
+-      });
+-      const data = await res.json();
+-      if (res.ok) {
+-        setStatus("Data berhasil diverifikasi! Ringkasan AI aman telah dibangkitkan.");
+-        setTimeout(() => router.push("/health-worker"), 2000);
+-      } else {
+-        setStatus(`Error: ${data.error}`);
+-      }
+-    } catch {
+-      setStatus("Gagal memproses verifikasi.");
+-    } finally {
+-      setLoading(false);
+-    }
+-  };
++export default async function VerifyVisitDetailPage({ params }: { params: Promise<{ visitId: string }> }) {
++  const ctx = await requirePageContext(["health_worker", "posyandu_admin", "system_admin"]);
++  const { visitId } = await params;
++  const visitSnap = await adminDb.collection("visits").doc(visitId).get();
++  const visit = visitSnap.data();
++  if (!visitSnap.exists || !visit || visit.posyanduId !== ctx.posyanduId) notFound();
++  const measSnap = await adminDb.collection("anthropometry_measurements").where("visitId", "==", visitId).get();
++  const meas = measSnap.docs
++    .filter(d => !d.data().supersededAt)
++    .sort((a, b) => String(b.data().measuredAt || "").localeCompare(String(a.data().measuredAt || "")))[0]?.data();
++  const labels = await lookupChildLabels(ctx.posyanduId, [String(visit.childId)]);
++  const child = labels.get(String(visit.childId));
++  const flags = Array.isArray(meas?.qualityFlags) ? (meas!.qualityFlags as string[]) : [];
++  const status = String(visit.verificationStatus) as VerificationStatus;
+ 
+   return (
+     <div className="max-w-lg mx-auto posyandu-card p-6 sm:p-7 space-y-5">
+       <div className="border-b border-slate-100 pb-3">
+         <h2 className="text-lg font-bold text-slate-900">Verifikasi Catatan Pengukuran</h2>
+-        <p className="text-xs text-slate-500 mt-0.5">
+-          Tinjau hasil antropometri dan kalkulasi pertumbuhan deterministik
+-        </p>
++        <p className="text-xs text-slate-500 mt-0.5">Tinjau hasil antropometri sebelum disahkan</p>
+       </div>
+       <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-xl text-xs sm:text-sm space-y-2 text-slate-700">
++        <p><strong className="text-slate-900">Anak:</strong> {child ? `${child.fullName} (${child.registrationNumber})` : "-"}</p>
++        <p><strong className="text-slate-900">Tanggal kunjungan:</strong> {String(visit.visitDate)}</p>
++        <p><strong className="text-slate-900">Status:</strong> <StatusBadge status={status} /></p>
++        {meas ? (
++          <>
++            <p><strong className="text-slate-900">Umur saat pengukuran:</strong> {String(meas.ageMonths)} bulan</p>
++            <p><strong className="text-slate-900">Berat Badan:</strong> {String(meas.weightKg)} kg</p>
++            <p>
++              <strong className="text-slate-900">Panjang/Tinggi:</strong> {String(meas.lengthHeightCm)} cm
++              ({meas.measurementType === "recumbent_length" ? "terlentang" : "berdiri"})
++            </p>
++          </>
++        ) : <p className="text-rose-700">Pengukuran aktif tidak ditemukan.</p>}
+         <p>
+-          <strong className="text-slate-900">ID Kunjungan:</strong>{" "}
+-          <span className="font-mono text-xs">{params.visitId}</span>
+-        </p>
+-        <p>
+-          <strong className="text-slate-900">Berat Badan:</strong> 10.2 kg
+-        </p>
+-        <p>
+-          <strong className="text-slate-900">Panjang/Tinggi:</strong> 78.4 cm (Standing)
+-        </p>
+-        <p>
+-          <strong className="text-slate-900">Modul Pertumbuhan:</strong> WAZ (-0.2 SD), LAZ (-0.5 SD) &bull; Rentang Normal
+-        </p>
+-      </div>
+-      {status && (
+-        <p className="text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 px-3.5 py-2.5 rounded-xl">
+-          {status}
++          <strong className="text-slate-900">Modul Pertumbuhan:</strong> interpretasi WHO belum tersedia karena
++          dataset referensi resmi dan golden test belum dipasang. Tidak ada Z-score atau klasifikasi yang ditampilkan.
+         </p>
+-      )}
+-      <div className="flex gap-2.5 pt-1">
+-        <Button onClick={handleVerify} disabled={loading} className="w-full">
+-          {loading ? "Memproses..." : "Sahkan & Buat Ringkasan"}
+-        </Button>
++        {flags.length > 0 && (
++          <p className="text-amber-800"><strong>Penanda kualitas (bukan diagnosis):</strong> {flags.join(", ")}</p>
++        )}
++        {typeof visit.rejectionReason === "string" && status === "needs_correction" && (
++          <p className="text-rose-800"><strong>Alasan penolakan:</strong> {visit.rejectionReason}</p>
++        )}
+       </div>
++      {status === "pending_verification" && meas
++        ? <VerifyActions visitId={visitId} />
++        : <p className="text-xs text-slate-500">Kunjungan ini tidak berada pada status menunggu verifikasi.</p>}
++      <Link href="/health-worker" className="block text-center text-xs font-semibold text-emerald-700 hover:underline">Kembali ke antrean</Link>
+     </div>
+   );
+ }
+diff --git a/src/app/(dashboard)/page.tsx b/src/app/(dashboard)/page.tsx
+index a658127..891dc70 100644
+--- a/src/app/(dashboard)/page.tsx
++++ b/src/app/(dashboard)/page.tsx
+@@ -1,5 +1,7 @@
+ import { redirect } from "next/navigation";
++import { requirePageContext, ROLE_HOME } from "@/lib/auth/page-context";
+ 
+-export default function DashboardRootPage() {
+-  redirect("/cadre");
++export default async function DashboardRootPage() {
++  const ctx = await requirePageContext();
++  redirect(ROLE_HOME[ctx.role]);
+ }
+diff --git a/src/app/(dashboard)/parent/children/[childId]/page.tsx b/src/app/(dashboard)/parent/children/[childId]/page.tsx
+index cadf89d..2aec27b 100644
+--- a/src/app/(dashboard)/parent/children/[childId]/page.tsx
++++ b/src/app/(dashboard)/parent/children/[childId]/page.tsx
+@@ -1,38 +1,127 @@
+-"use client";
++import React from "react";
++import { notFound } from "next/navigation";
++import { adminDb } from "@/lib/firebase/admin";
++import { rowsOf } from "@/lib/data/rows";
++import { requirePageContext } from "@/lib/auth/page-context";
++import { calculateAgeMonths } from "@/lib/growth/age";
++import { todayInJakarta } from "@/lib/data/child-lookup";
++import { GrowthChart } from "@/components/charts/GrowthChart";
++import { VisitSummaryCard } from "@/components/ai/VisitSummaryCard";
++import { CorrectionRequestButton } from "@/components/forms/CorrectionRequestButton";
++import { getApprovedUpcomingRules, ApprovedScheduleRule } from "@/lib/schedule/approved-catalog";
+ 
+-import React, { useState } from "react";
+-import { CorrectionRequestModal } from "@/components/forms/CorrectionRequestModal";
+-import { Button } from "@/components/ui/Button";
++const REQUEST_LABEL: Record<string, string> = {
++  pending_review: "Menunggu tinjauan petugas",
++  accepted_pending_correction: "Diterima, menunggu koreksi data oleh petugas",
++  rejected: "Ditolak petugas",
++};
+ 
+-export default function ChildDetailPage() {
+-  const [modalOpen, setModalOpen] = useState(false);
++export default async function ChildDetailPage({ params }: { params: Promise<{ childId: string }> }) {
++  const ctx = await requirePageContext(["parent"]);
++  const { childId } = await params;
++  const childSnap = await adminDb.collection("children").doc(childId).get();
++  const child = childSnap.data();
++  if (!childSnap.exists || !child || child.posyanduId !== ctx.posyanduId
++      || !Array.isArray(child.guardianUids) || !child.guardianUids.includes(ctx.uid)) notFound();
++
++  const [visitSnap, measSnap, immSnap, summarySnap, requestSnap, rulesSnap] = await Promise.all([
++    adminDb.collection("visits").where("childId", "==", childId).where("posyanduId", "==", ctx.posyanduId).limit(100).get(),
++    adminDb.collection("anthropometry_measurements").where("childId", "==", childId)
++      .where("posyanduId", "==", ctx.posyanduId).where("verificationStatus", "==", "verified").limit(100).get(),
++    adminDb.collection("immunization_events").where("childId", "==", childId).where("posyanduId", "==", ctx.posyanduId).limit(100).get(),
++    adminDb.collection("ai_summaries").where("childId", "==", childId).where("posyanduId", "==", ctx.posyanduId).limit(50).get(),
++    adminDb.collection("correction_requests").where("requestedBy", "==", ctx.uid).where("posyanduId", "==", ctx.posyanduId).limit(100).get(),
++    adminDb.collection("immunization_schedule_rules").where("status", "==", "approved").limit(200).get(),
++  ]);
++
++  const measurements = measSnap.docs.map(d => d.data()).filter(m => !m.supersededAt);
++  const measurementByVisit = new Map(measurements.map(m => [String(m.visitId), m]));
++  const verifiedVisits = rowsOf(visitSnap)
++    .filter(v => v.verificationStatus === "verified")
++    .sort((a, b) => String(b.visitDate).localeCompare(String(a.visitDate)));
++  const requestsByVisit = new Map(requestSnap.docs.map(d => [String(d.data().visitId), d.data()]));
++  const chartData = measurements
++    .map(m => ({ ageMonths: Number(m.ageMonths), weightKg: Number(m.weightKg), visitDate: String(m.measuredAt || "") }))
++    .filter(m => Number.isFinite(m.ageMonths) && Number.isFinite(m.weightKg));
++
++  // Summary of the latest verified visit; older ones are shown only through history.
++  const summary = summarySnap.docs
++    .map(d => d.data())
++    .filter(s => s.guardianUid === ctx.uid)
++    .sort((a, b) => String(b.generatedAt).localeCompare(String(a.generatedAt)))[0];
++  let sourceDoc: string | undefined;
++  if (summary && Array.isArray(summary.knowledgeSourceIds) && summary.knowledgeSourceIds.length > 0) {
++    const docs = await Promise.all(summary.knowledgeSourceIds.slice(0, 5)
++      .map((id: string) => adminDb.collection("knowledge_documents").doc(id).get()));
++    const titles = docs.map(d => d.data()?.sourceTitle).filter((t): t is string => typeof t === "string" && !!t);
++    if (titles.length) sourceDoc = titles.join("; ");
++  }
++
++  const immunizations = rowsOf(immSnap)
++    .sort((a, b) => String(b.administrationDate).localeCompare(String(a.administrationDate)));
++  let ageMonths = -1;
++  try { ageMonths = calculateAgeMonths(String(child.dateOfBirth), todayInJakarta()); } catch { /* invalid dob */ }
++  const rules = rulesSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, unknown>) }) as unknown as ApprovedScheduleRule);
++  const upcoming = getApprovedUpcomingRules(rules, ageMonths, immunizations.map(i => String(i.vaccineCode)));
+ 
+   return (
+     <div className="space-y-5">
+       <div className="posyandu-page-header">
+         <div>
+-          <h2 className="posyandu-page-title">Riwayat Kunjungan Lengkap</h2>
+-          <p className="posyandu-page-subtitle">Rekam pengukuran yang telah divalidasi petugas</p>
++          <h2 className="posyandu-page-title">{String(child.fullName)}</h2>
++          <p className="posyandu-page-subtitle">No. registrasi {String(child.registrationNumber)} &bull; lahir {String(child.dateOfBirth)}</p>
+         </div>
+       </div>
+-      <div className="posyandu-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+-        <div className="space-y-1">
+-          <p className="font-bold text-sm text-slate-900">Kunjungan 12 November 2026</p>
+-          <p className="text-xs text-slate-600">
+-            BB: <strong className="text-slate-800">10.2 kg</strong> &bull; TB:{" "}
+-            <strong className="text-slate-800">78.4 cm</strong> &bull; Status:{" "}
+-            <span className="text-emerald-700 font-semibold">Terverifikasi</span>
++
++      {summary ? (
++        <VisitSummaryCard summaryText={String(summary.generatedText)} sourceDoc={sourceDoc}
++          generatedAt={String(summary.generatedAt)} safetyStatus={String(summary.safetyStatus)} />
++      ) : (
++        <div className="posyandu-card p-5 text-sm text-slate-600">Ringkasan tersedia setelah kunjungan disahkan petugas.</div>
++      )}
++
++      <GrowthChart data={chartData} />
++
++      <section className="posyandu-card p-5 space-y-3">
++        <h3 className="font-bold text-sm text-slate-900">Riwayat Kunjungan Terverifikasi</h3>
++        {verifiedVisits.length === 0 && <p className="text-sm text-slate-600">Belum ada kunjungan terverifikasi.</p>}
++        {verifiedVisits.map(v => {
++          const m = measurementByVisit.get(v.id);
++          const request = requestsByVisit.get(v.id);
++          return (
++            <div key={v.id} className="flex flex-col gap-3 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
++              <div className="space-y-1">
++                <p className="text-sm font-bold text-slate-900">Kunjungan {String(v.visitDate)}</p>
++                <p className="text-xs text-slate-600">
++                  {m ? <>BB: <strong>{String(m.weightKg)} kg</strong> &bull; TB/PB: <strong>{String(m.lengthHeightCm)} cm</strong></> : "Pengukuran tidak tersedia"}
++                  {" "}&bull; <span className="font-semibold text-emerald-700">Terverifikasi</span>
++                </p>
++                {request && <p className="text-xs text-amber-800">Permintaan koreksi: {REQUEST_LABEL[String(request.status)] || String(request.status)}</p>}
++              </div>
++              {!request && <CorrectionRequestButton visitId={v.id} />}
++            </div>
++          );
++        })}
++      </section>
++
++      <section className="posyandu-card p-5 space-y-3">
++        <h3 className="font-bold text-sm text-slate-900">Imunisasi &amp; Jadwal</h3>
++        <p className="text-xs text-slate-500">Status &ldquo;belum tercatat&rdquo; tidak berarti belum diberikan. Konfirmasikan dengan Posyandu atau Puskesmas.</p>
++        {immunizations.length === 0 ? <p className="text-sm text-slate-600">Belum ada imunisasi tercatat pada aplikasi ini.</p> : (
++          <ul className="space-y-1 text-sm text-slate-800">
++            {immunizations.map(i => <li key={i.id}>{String(i.administrationDate)} &mdash; {String(i.vaccineCode)}{i.doseSequence ? ` (dosis ${String(i.doseSequence)})` : ""}</li>)}
++          </ul>
++        )}
++        {upcoming.length === 0 ? (
++          <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
++            Jadwal imunisasi belum tersedia karena katalog resmi belum disahkan. Konfirmasikan jadwal dengan Posyandu/Puskesmas.
+           </p>
+-        </div>
+-        <Button variant="outline" onClick={() => setModalOpen(true)}>
+-          Minta Koreksi
+-        </Button>
+-      </div>
+-      <CorrectionRequestModal
+-        visitId="visit-demo-1"
+-        isOpen={modalOpen}
+-        onClose={() => setModalOpen(false)}
+-      />
++        ) : (
++          <ul className="space-y-1 text-sm text-slate-800">
++            {upcoming.map(r => <li key={r.id}>{r.name} &mdash; usia sasaran {r.targetAgeMonths} bulan <span className="text-xs text-slate-500">(katalog {r.version})</span></li>)}
++          </ul>
++        )}
++      </section>
+     </div>
+   );
+ }
+diff --git a/src/app/(dashboard)/parent/page.tsx b/src/app/(dashboard)/parent/page.tsx
+index 906ecce..9581cc2 100644
+--- a/src/app/(dashboard)/parent/page.tsx
++++ b/src/app/(dashboard)/parent/page.tsx
+@@ -2,6 +2,7 @@ import React from "react";
+ import { cookies } from "next/headers";
+ import { requirePageSession } from "@/lib/auth/page-session";
+ import { adminDb } from "@/lib/firebase/admin";
++import Link from "next/link";
+ import { GrowthChart } from "@/components/charts/GrowthChart";
+ 
+ export default async function ParentDashboard() {
+@@ -26,6 +27,7 @@ export default async function ParentDashboard() {
+       <div className="posyandu-page-header"><div><h1 className="posyandu-page-title">Catatan Pertumbuhan Anak</h1><p className="posyandu-page-subtitle">Data anak dan pengukuran terverifikasi pada Posyandu aktif.</p></div></div>
+       {children.length === 0 ? <div className="posyandu-card p-5 text-sm text-slate-600">Belum ada profil anak yang terhubung dengan akun wali ini.</div> : <>
+         <div className="posyandu-card p-5"><h2 className="font-bold text-slate-900">{selected!.data().fullName}</h2><p className="mt-1 text-sm text-slate-500">Nomor registrasi: {selected!.data().registrationNumber}</p><p className="mt-1 text-sm text-slate-500">Tanggal lahir: {selected!.data().dateOfBirth}</p></div>
++        <div className="posyandu-card p-5 space-y-2"><h3 className="font-bold text-sm text-slate-900">Profil dan riwayat lengkap</h3><ul className="space-y-1 text-sm">{children.map(c => <li key={c.id}><Link className="font-semibold text-emerald-700 hover:underline" href={`/parent/children/${c.id}`}>{String(c.data().fullName)}</Link></li>)}</ul></div>
+         <GrowthChart data={chartData} />
+       </>}
+     </div>
+diff --git a/src/app/(dashboard)/reviewer/page.tsx b/src/app/(dashboard)/reviewer/page.tsx
+index 9743474..9be6879 100644
+--- a/src/app/(dashboard)/reviewer/page.tsx
++++ b/src/app/(dashboard)/reviewer/page.tsx
+@@ -1,27 +1,45 @@
+ import React from "react";
++import { adminDb } from "@/lib/firebase/admin";
++import { requirePageContext } from "@/lib/auth/page-context";
++import { isScheduleRuleUsable, ApprovedScheduleRule } from "@/lib/schedule/approved-catalog";
++
++export default async function ContentReviewerPage() {
++  await requirePageContext(["content_reviewer", "posyandu_admin", "system_admin"]);
++  const [rulesSnap, knowledgeSnap] = await Promise.all([
++    adminDb.collection("immunization_schedule_rules").limit(200).get(),
++    adminDb.collection("knowledge_documents").limit(200).get(),
++  ]);
++  const rules = rulesSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, unknown>) }) as unknown as ApprovedScheduleRule);
++  const usable = rules.filter(isScheduleRuleUsable);
++  const knowledgeApproved = knowledgeSnap.docs.filter(d => d.data().status === "approved").length;
+ 
+-export default function ContentReviewerPage() {
+   return (
+     <div className="space-y-5">
+       <div className="posyandu-page-header">
+         <div>
+-          <h2 className="posyandu-page-title">Reviewer Konten Kesehatan & Aturan Imunisasi</h2>
+-          <p className="posyandu-page-subtitle">
+-            Validasi katalog jadwal imunisasi dan materi edukasi sebelum digunakan
+-          </p>
++          <h2 className="posyandu-page-title">Reviewer Konten Kesehatan &amp; Aturan Imunisasi</h2>
++          <p className="posyandu-page-subtitle">Status katalog dan materi yang telah disahkan. Data ini dibaca langsung dari basis data.</p>
+         </div>
+       </div>
+       <div className="posyandu-card p-5 sm:p-6 space-y-3">
+-        <h4 className="font-bold text-sm sm:text-base text-slate-900">
+-          Katalog Aturan Imunisasi Berversi
+-        </h4>
++        <h4 className="font-bold text-sm sm:text-base text-slate-900">Katalog Aturan Imunisasi Berversi</h4>
++        {usable.length === 0 ? (
++          <p className="text-xs sm:text-sm text-amber-800">
++            Belum ada aturan imunisasi yang disahkan dengan metadata lengkap. Jadwal dan pengingat imunisasi tidak ditampilkan
++            kepada wali sampai katalog resmi disahkan tenaga kesehatan berwenang.
++          </p>
++        ) : (
++          <p className="text-xs sm:text-sm text-slate-600">
++            {usable.length} aturan disahkan dan memenuhi metadata sumber, versi, serta persetujuan
++            (dari {rules.length} aturan tersimpan).
++          </p>
++        )}
++      </div>
++      <div className="posyandu-card p-5 sm:p-6 space-y-2">
++        <h4 className="font-bold text-sm sm:text-base text-slate-900">Materi Edukasi (Knowledge Base)</h4>
+         <p className="text-xs sm:text-sm text-slate-600">
+-          Versi aktif: <strong className="text-slate-900">kemenkes-2024.1</strong> &bull; Disahkan oleh Kementerian Kesehatan RI.
++          {knowledgeApproved} dokumen berstatus approved dari {knowledgeSnap.size} dokumen tersimpan.
+         </p>
+-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200 font-semibold">
+-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+-          Status: Terverifikasi & Terkunci
+-        </span>
+       </div>
+     </div>
+   );
+diff --git a/src/app/api/corrections/[requestId]/route.ts b/src/app/api/corrections/[requestId]/route.ts
+new file mode 100644
+index 0000000..fb99e54
+--- /dev/null
++++ b/src/app/api/corrections/[requestId]/route.ts
+@@ -0,0 +1,34 @@
++import { NextRequest, NextResponse } from "next/server";
++import { adminDb } from "@/lib/firebase/admin";
++import { writeAuditLog } from "@/lib/audit/audit-logger";
++import { requireAuth, isAuthError } from "@/lib/auth/server";
++
++// Reviewing a request only records the decision. Changing measurement values still
++// goes through POST /api/visits/{id}/correct, which versions the record and audits it.
++export async function PATCH(req: NextRequest, context: { params: Promise<{ requestId: string }> }) {
++  const auth = await requireAuth(req, ["health_worker", "posyandu_admin", "system_admin"]);
++  if (isAuthError(auth)) return auth;
++  let body: { decision?: unknown; note?: unknown };
++  try { body = await req.json(); } catch { return NextResponse.json({ error: "Body tidak valid" }, { status: 400 }); }
++  const note = typeof body.note === "string" ? body.note.trim() : "";
++  if (!["accepted", "rejected"].includes(String(body.decision)) || note.length < 5) {
++    return NextResponse.json({ error: "Keputusan (accepted/rejected) dan catatan minimal 5 karakter wajib diisi" }, { status: 400 });
++  }
++  const { requestId } = await context.params;
++  const ref = adminDb.collection("correction_requests").doc(requestId);
++  const snap = await ref.get();
++  if (!snap.exists || snap.data()?.posyanduId !== auth.posyanduId) {
++    return NextResponse.json({ error: "Permintaan koreksi tidak ditemukan" }, { status: 404 });
++  }
++  const before = snap.data()!;
++  if (before.status !== "pending_review") {
++    return NextResponse.json({ error: "Permintaan ini sudah ditinjau" }, { status: 409 });
++  }
++  const now = new Date().toISOString();
++  const status = body.decision === "accepted" ? "accepted_pending_correction" : "rejected";
++  await ref.update({ status, reviewedBy: auth.uid, reviewedAt: now, reviewNote: note.slice(0, 2000) });
++  await writeAuditLog({ actorUserId: auth.uid, action: "REVIEW_CORRECTION_REQUEST", resourceType: "correction_request",
++    resourceId: requestId, beforeSnapshot: { status: before.status }, afterSnapshot: { status }, reason: note.slice(0, 2000),
++    posyanduId: auth.posyanduId });
++  return NextResponse.json({ success: true, requestId, status });
++}
+diff --git a/src/app/api/visits/[visitId]/reject/route.ts b/src/app/api/visits/[visitId]/reject/route.ts
+new file mode 100644
+index 0000000..afba965
+--- /dev/null
++++ b/src/app/api/visits/[visitId]/reject/route.ts
+@@ -0,0 +1,38 @@
++import { NextRequest, NextResponse } from "next/server";
++import { adminDb } from "@/lib/firebase/admin";
++import { writeAuditLog } from "@/lib/audit/audit-logger";
++import { requireAuth, isAuthError } from "@/lib/auth/server";
++
++// US-T01: rejecting verification requires a reason; the record is never deleted.
++export async function POST(req: NextRequest, context: { params: Promise<{ visitId: string }> }) {
++  const auth = await requireAuth(req, ["health_worker", "posyandu_admin", "system_admin"]);
++  if (isAuthError(auth)) return auth;
++  let body: { reason?: unknown };
++  try { body = await req.json(); } catch { return NextResponse.json({ error: "Body tidak valid" }, { status: 400 }); }
++  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
++  if (reason.length < 5) return NextResponse.json({ error: "Alasan penolakan minimal 5 karakter" }, { status: 400 });
++  const { visitId } = await context.params;
++  const visitRef = adminDb.collection("visits").doc(visitId);
++  const visitSnap = await visitRef.get();
++  if (!visitSnap.exists || visitSnap.data()?.posyanduId !== auth.posyanduId) {
++    return NextResponse.json({ error: "Kunjungan tidak ditemukan" }, { status: 404 });
++  }
++  const visit = visitSnap.data()!;
++  if (visit.verificationStatus !== "pending_verification") {
++    return NextResponse.json({ error: "Hanya kunjungan menunggu verifikasi yang dapat ditolak" }, { status: 409 });
++  }
++  const now = new Date().toISOString();
++  const version = (visit.version || 1) + 1;
++  const measSnap = await adminDb.collection("anthropometry_measurements").where("visitId", "==", visitId).get();
++  await adminDb.runTransaction(async tx => {
++    tx.update(visitRef, { verificationStatus: "needs_correction", rejectionReason: reason,
++      rejectedBy: auth.uid, rejectedAt: now, version, updatedAt: now });
++    for (const doc of measSnap.docs) {
++      if (!doc.data().supersededAt) tx.update(doc.ref, { verificationStatus: "needs_correction", updatedAt: now });
++    }
++  });
++  await writeAuditLog({ actorUserId: auth.uid, action: "REJECT_VISIT_VERIFICATION", resourceType: "visit",
++    resourceId: visitId, beforeSnapshot: { verificationStatus: visit.verificationStatus },
++    afterSnapshot: { verificationStatus: "needs_correction", version }, reason, posyanduId: auth.posyanduId });
++  return NextResponse.json({ success: true, visitId, status: "needs_correction" });
++}
+diff --git a/src/app/api/visits/[visitId]/verify/route.ts b/src/app/api/visits/[visitId]/verify/route.ts
+index d2d3090..cfdba33 100644
+--- a/src/app/api/visits/[visitId]/verify/route.ts
++++ b/src/app/api/visits/[visitId]/verify/route.ts
+@@ -44,12 +44,30 @@ export async function POST(req: NextRequest, context: { params: Promise<{ visitI
+     await writeAuditLog({ actorUserId: auth.uid, action: "VERIFY_VISIT", resourceType: "visit",
+       resourceId: visitId, beforeSnapshot: visit, afterSnapshot: { verificationStatus: "verified", verifiedBy: auth.uid, version: nextVersion }, reason: "Verifikasi oleh petugas berwenang", posyanduId: auth.posyanduId });
+ 
++    // Previous verified, non-superseded measurement of the same child (numeric comparison only).
++    const prevSnap = await adminDb.collection("anthropometry_measurements")
++      .where("childId", "==", visit.childId).where("posyanduId", "==", auth.posyanduId)
++      .where("verificationStatus", "==", "verified").get();
++    const prevDoc = prevSnap.docs
++      .filter(d => !d.data().supersededAt && d.data().visitId !== visitId
++        && String(d.data().measuredAt || "") < String(meas.measuredAt || ""))
++      .sort((a, b) => String(b.data().measuredAt || "").localeCompare(String(a.data().measuredAt || "")))[0];
++    let previousMeasurement: { visit_date: string; weight_kg: number; length_height_cm: number } | null = null;
++    if (prevDoc) {
++      const prevVisit = await adminDb.collection("visits").doc(String(prevDoc.data().visitId)).get();
++      const prevDate = prevVisit.exists ? prevVisit.data()?.visitDate : null;
++      if (typeof prevDate === "string") {
++        previousMeasurement = { visit_date: prevDate, weight_kg: Number(prevDoc.data().weightKg),
++          length_height_cm: Number(prevDoc.data().lengthHeightCm) };
++      }
++    }
++
+     const snippets = await retrieveApprovedKnowledge("pola makan tumbuh kembang edukasi Posyandu", 3);
+     const safePayload = buildSafeAiPayload({
+       age_months: Number(meas.ageMonths), sex_for_reference: meas.sex,
+       visit_date: visit.visitDate,
+       measurements: { weight_kg: meas.weightKg, length_height_cm: meas.lengthHeightCm, measurement_type: meas.measurementType },
+-      previous_measurement: null,
++      previous_measurement: previousMeasurement,
+       validated_assessments: assessments.map(a => ({ indicator: a.indicator,
+         classification_code: a.classificationCode, reference_version: a.referenceVersion,
+         needs_verification: a.needsVerification })),
+@@ -72,7 +90,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ visitI
+     }
+     const summaryRef = await adminDb.collection("ai_summaries").add({
+       posyanduId: auth.posyanduId, guardianUid: visit.guardianUid || null,
+-      childId: visit.childId, ...provenance, generatedText: aiRes.text,
++      ...provenance, generatedText: aiRes.text,
+       reviewStatus: "auto_checked",
+     });
+     return NextResponse.json({ success: true, visitId, summaryId: summaryRef.id,
+diff --git a/src/components/ai/VisitSummaryCard.tsx b/src/components/ai/VisitSummaryCard.tsx
+index 4144e2e..3db11a1 100644
+--- a/src/components/ai/VisitSummaryCard.tsx
++++ b/src/components/ai/VisitSummaryCard.tsx
+@@ -9,7 +9,7 @@ interface VisitSummaryCardProps {
+ 
+ export const VisitSummaryCard: React.FC<VisitSummaryCardProps> = ({
+   summaryText,
+-  sourceDoc = "Buku KIA Kemenkes RI 2024",
++  sourceDoc,
+   generatedAt,
+   safetyStatus,
+ }) => {
+@@ -29,7 +29,7 @@ export const VisitSummaryCard: React.FC<VisitSummaryCardProps> = ({
+       </div>
+       <p className="text-sm leading-7 text-slate-700">{summaryText}</p>
+       <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+-        <span>Sumber edukasi: <strong className="font-semibold text-slate-700">{sourceDoc}</strong></span>
++        <span>Sumber edukasi: <strong className="font-semibold text-slate-700">{sourceDoc || "Tidak ada materi edukasi terlampir"}</strong></span>
+         <span>Diperbarui: {new Date(generatedAt).toLocaleDateString("id-ID")}</span>
+       </div>
+       <div className="rounded-xl bg-slate-50 px-3.5 py-3 text-xs leading-relaxed text-slate-600">
+diff --git a/src/components/forms/CorrectionRequestButton.tsx b/src/components/forms/CorrectionRequestButton.tsx
+new file mode 100644
+index 0000000..7783d26
+--- /dev/null
++++ b/src/components/forms/CorrectionRequestButton.tsx
+@@ -0,0 +1,15 @@
++"use client";
++
++import React, { useState } from "react";
++import { Button } from "../ui/Button";
++import { CorrectionRequestModal } from "./CorrectionRequestModal";
++
++export const CorrectionRequestButton: React.FC<{ visitId: string }> = ({ visitId }) => {
++  const [open, setOpen] = useState(false);
++  return (
++    <>
++      <Button variant="outline" onClick={() => setOpen(true)}>Minta Koreksi</Button>
++      <CorrectionRequestModal visitId={visitId} isOpen={open} onClose={() => setOpen(false)} />
++    </>
++  );
++};
+diff --git a/src/components/forms/CorrectionRequestModal.tsx b/src/components/forms/CorrectionRequestModal.tsx
+index 3394b86..bf7e9de 100644
+--- a/src/components/forms/CorrectionRequestModal.tsx
++++ b/src/components/forms/CorrectionRequestModal.tsx
+@@ -10,26 +10,29 @@ export const CorrectionRequestModal: React.FC<{
+ }> = ({ visitId, isOpen, onClose }) => {
+   const [reason, setReason] = useState("");
+   const [status, setStatus] = useState("");
++  const [error, setError] = useState("");
+ 
+   if (!isOpen) return null;
+ 
+   const handleSend = async () => {
+-    const res = await fetch("/api/corrections/request", {
+-      method: "POST",
+-      headers: { "Content-Type": "application/json" },
+-      body: JSON.stringify({
+-        visitId,
+-        requestedBy: "wali-1",
+-        reason,
+-      }),
+-    });
+-    if (res.ok) {
+-      setStatus("Permintaan koreksi berhasil dikirim!");
++    setError("");
++    try {
++      const res = await fetch("/api/corrections/request", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ visitId, reason }),
++      });
++      const data = await res.json().catch(() => ({}));
++      if (!res.ok) throw new Error(data.error || "Permintaan koreksi gagal dikirim.");
++      setStatus("Permintaan koreksi berhasil dikirim.");
+       setTimeout(() => {
+         onClose();
+         setStatus("");
+         setReason("");
++        window.location.reload();
+       }, 1500);
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "Permintaan koreksi gagal dikirim.");
+     }
+   };
+ 
+@@ -52,6 +55,11 @@ export const CorrectionRequestModal: React.FC<{
+             className="posyandu-input resize-none"
+           />
+         </div>
++        {error && (
++          <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm font-medium text-rose-800">
++            {error}
++          </p>
++        )}
+         {status && (
+           <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm font-medium text-emerald-800">
+             {status}
+diff --git a/src/components/forms/CorrectionReviewActions.tsx b/src/components/forms/CorrectionReviewActions.tsx
+new file mode 100644
+index 0000000..2e0bd0a
+--- /dev/null
++++ b/src/components/forms/CorrectionReviewActions.tsx
+@@ -0,0 +1,43 @@
++"use client";
++
++import React, { useState } from "react";
++import { useRouter } from "next/navigation";
++import { Button } from "../ui/Button";
++
++export const CorrectionReviewActions: React.FC<{ requestId: string }> = ({ requestId }) => {
++  const router = useRouter();
++  const [note, setNote] = useState("");
++  const [loading, setLoading] = useState(false);
++  const [error, setError] = useState("");
++
++  const decide = async (decision: "accepted" | "rejected") => {
++    setLoading(true);
++    setError("");
++    try {
++      const res = await fetch(`/api/corrections/${encodeURIComponent(requestId)}`, {
++        method: "PATCH",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ decision, note }),
++      });
++      const data = await res.json().catch(() => ({}));
++      if (!res.ok) throw new Error(data.error || "Keputusan gagal disimpan.");
++      router.refresh();
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "Keputusan gagal disimpan.");
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  return (
++    <div className="space-y-2">
++      <input value={note} onChange={e => setNote(e.target.value)} className="posyandu-input"
++        placeholder="Catatan keputusan (min. 5 karakter)" aria-label="Catatan keputusan" />
++      {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
++      <div className="flex gap-2">
++        <Button onClick={() => decide("accepted")} disabled={loading || note.trim().length < 5}>Terima</Button>
++        <Button variant="outline" onClick={() => decide("rejected")} disabled={loading || note.trim().length < 5}>Tolak</Button>
++      </div>
++    </div>
++  );
++};
+diff --git a/src/components/forms/VerifyActions.tsx b/src/components/forms/VerifyActions.tsx
+new file mode 100644
+index 0000000..149c841
+--- /dev/null
++++ b/src/components/forms/VerifyActions.tsx
+@@ -0,0 +1,77 @@
++"use client";
++
++import React, { useState } from "react";
++import { useRouter } from "next/navigation";
++import { Button } from "../ui/Button";
++
++export const VerifyActions: React.FC<{ visitId: string }> = ({ visitId }) => {
++  const router = useRouter();
++  const [loading, setLoading] = useState(false);
++  const [message, setMessage] = useState("");
++  const [isError, setIsError] = useState(false);
++  const [reason, setReason] = useState("");
++  const [rejecting, setRejecting] = useState(false);
++
++  const call = async (path: "verify" | "reject", body?: unknown) => {
++    setLoading(true);
++    setMessage("");
++    setIsError(false);
++    try {
++      const res = await fetch(`/api/visits/${encodeURIComponent(visitId)}/${path}`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify(body ?? {}),
++      });
++      const data = await res.json().catch(() => ({}));
++      if (!res.ok) throw new Error(data.error || "Permintaan gagal diproses.");
++      setMessage(path === "verify"
++        ? "Kunjungan disahkan. Ringkasan dibuat dari data terverifikasi."
++        : "Verifikasi ditolak dan dikembalikan untuk dikoreksi.");
++      setTimeout(() => router.push("/health-worker"), 1500);
++      router.refresh();
++    } catch (err) {
++      setIsError(true);
++      setMessage(err instanceof Error ? err.message : "Permintaan gagal diproses.");
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  return (
++    <div className="space-y-3">
++      {message && (
++        <p role={isError ? "alert" : "status"} className={`rounded-xl border px-3.5 py-2.5 text-xs font-medium ${isError
++          ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
++          {message}
++        </p>
++      )}
++      {rejecting && (
++        <div>
++          <label className="posyandu-label" htmlFor="reject-reason">Alasan penolakan (wajib)</label>
++          <textarea id="reject-reason" rows={3} value={reason} onChange={e => setReason(e.target.value)}
++            className="posyandu-input resize-none" placeholder="Jelaskan data yang perlu diperiksa ulang..." />
++        </div>
++      )}
++      <div className="flex flex-col gap-2.5 sm:flex-row">
++        {!rejecting ? (
++          <>
++            <Button onClick={() => call("verify")} disabled={loading} className="w-full">
++              {loading ? "Memproses..." : "Sahkan & Buat Ringkasan"}
++            </Button>
++            <Button variant="outline" onClick={() => setRejecting(true)} disabled={loading} className="w-full">
++              Tolak / Perlu Koreksi
++            </Button>
++          </>
++        ) : (
++          <>
++            <Button variant="danger" onClick={() => call("reject", { reason })}
++              disabled={loading || reason.trim().length < 5} className="w-full">
++              {loading ? "Memproses..." : "Kirim Penolakan"}
++            </Button>
++            <Button variant="outline" onClick={() => setRejecting(false)} disabled={loading} className="w-full">Batal</Button>
++          </>
++        )}
++      </div>
++    </div>
++  );
++};
+diff --git a/src/lib/ai/summary-provenance.ts b/src/lib/ai/summary-provenance.ts
+new file mode 100644
+index 0000000..a8a0afb
+--- /dev/null
++++ b/src/lib/ai/summary-provenance.ts
+@@ -0,0 +1,28 @@
++export type SummaryProvenance = {
++  visitId: string;
++  childId: string;
++  inputRecordVersion: number;
++  generatedAt: string;
++  modelProvider: string;
++  modelVersion: string;
++  promptVersion: string;
++  knowledgeSourceIds: string[];
++  safetyStatus: "passed" | "fallback_template";
++};
++
++const nonEmpty = (value: unknown): value is string =>
++  typeof value === "string" && value.trim().length > 0;
++
++/**
++ * Docs 04/05 require every AI summary to record provider, model, prompt version,
++ * sources, time, and safety status. A summary without complete provenance must
++ * not be stored.
++ */
++export function validateSummaryProvenance(value: SummaryProvenance): boolean {
++  if (!value) return false;
++  if (![value.visitId, value.childId, value.modelProvider, value.modelVersion, value.promptVersion].every(nonEmpty)) return false;
++  if (!Number.isInteger(value.inputRecordVersion) || value.inputRecordVersion < 1) return false;
++  if (!nonEmpty(value.generatedAt) || Number.isNaN(Date.parse(value.generatedAt))) return false;
++  if (!Array.isArray(value.knowledgeSourceIds) || !value.knowledgeSourceIds.every(nonEmpty)) return false;
++  return value.safetyStatus === "passed" || value.safetyStatus === "fallback_template";
++}
+diff --git a/src/lib/auth/page-context.ts b/src/lib/auth/page-context.ts
+new file mode 100644
+index 0000000..a7423d0
+--- /dev/null
++++ b/src/lib/auth/page-context.ts
+@@ -0,0 +1,36 @@
++import { cookies } from "next/headers";
++import { redirect } from "next/navigation";
++import { adminDb } from "@/lib/firebase/admin";
++import { requirePageSession } from "@/lib/auth/page-session";
++import type { Role } from "@/types/verification";
++
++export type PageContext = { uid: string; posyanduId: string; role: Role };
++
++const ROLES: Role[] = ["parent", "cadre", "health_worker", "posyandu_admin", "content_reviewer", "system_admin"];
++
++export const ROLE_HOME: Record<Role, string> = {
++  parent: "/parent",
++  cadre: "/cadre",
++  health_worker: "/health-worker",
++  posyandu_admin: "/admin",
++  content_reviewer: "/reviewer",
++  system_admin: "/admin",
++};
++
++/**
++ * Server-side page guard: resolves the session cookie and the active tenant
++ * membership. The role always comes from the membership document, never from a
++ * cookie or request value. Users with another role are sent to their own home.
++ */
++export async function requirePageContext(allowedRoles?: Role[]): Promise<PageContext> {
++  const session = await requirePageSession();
++  const posyanduId = (await cookies()).get("active_posyandu")?.value;
++  if (!posyanduId) redirect("/login");
++  const snap = await adminDb.collection("memberships").doc(`${session.uid}_${posyanduId}`).get();
++  const m = snap.data();
++  if (!snap.exists || !m || m.userId !== session.uid || m.posyanduId !== posyanduId
++      || m.status !== "active" || !ROLES.includes(m.role)) redirect("/login");
++  const role = m.role as Role;
++  if (allowedRoles && !allowedRoles.includes(role)) redirect(ROLE_HOME[role]);
++  return { uid: session.uid, posyanduId, role };
++}
+diff --git a/src/lib/auth/server.ts b/src/lib/auth/server.ts
+index a519218..5201ee9 100644
+--- a/src/lib/auth/server.ts
++++ b/src/lib/auth/server.ts
+@@ -11,12 +11,30 @@ export type AuthContext = {
+ const ROLES: Role[] = ["parent", "cadre", "health_worker", "posyandu_admin", "content_reviewer", "system_admin"];
+ 
+ export async function requireAuth(req: NextRequest, allowedRoles?: Role[]): Promise<AuthContext | NextResponse> {
+-  const match = (req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
+-  if (!match) return NextResponse.json({ error: "Autentikasi diperlukan" }, { status: 401 });
+   try {
+-    const token = await adminAuth.verifyIdToken(match[1], true);
+-    const posyanduId = req.headers.get("x-posyandu-id")?.trim();
+-    if (!posyanduId) return NextResponse.json({ error: "Header x-posyandu-id wajib diisi" }, { status: 400 });
++    const bearer = (req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
++    let token: DecodedIdToken;
++    let posyanduId: string | undefined;
++    if (bearer) {
++      token = await adminAuth.verifyIdToken(bearer[1], true);
++      posyanduId = req.headers.get("x-posyandu-id")?.trim();
++    } else {
++      // Browser pages authenticate with the httpOnly session cookie created by /api/auth/session.
++      const sessionCookie = req.cookies.get("__session")?.value;
++      if (!sessionCookie) return NextResponse.json({ error: "Autentikasi diperlukan" }, { status: 401 });
++      if (!["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
++        // CSRF defence for cookie-authenticated writes: the Origin must match this host.
++        const origin = req.headers.get("origin");
++        let originHost = "";
++        try { originHost = origin ? new URL(origin).host : ""; } catch { /* invalid origin */ }
++        if (!originHost || originHost !== req.headers.get("host")) {
++          return NextResponse.json({ error: "Origin permintaan tidak diizinkan" }, { status: 403 });
++        }
++      }
++      token = await adminAuth.verifySessionCookie(sessionCookie, true);
++      posyanduId = req.cookies.get("active_posyandu")?.value?.trim();
++    }
++    if (!posyanduId) return NextResponse.json({ error: "Posyandu aktif wajib ditentukan" }, { status: 400 });
+     const membershipId = `${token.uid}_${posyanduId}`;
+     const membershipSnap = await adminDb.collection("memberships").doc(membershipId).get();
+     if (!membershipSnap.exists) return NextResponse.json({ error: "Keanggotaan Posyandu tidak ditemukan" }, { status: 403 });
+diff --git a/src/lib/data/child-lookup.ts b/src/lib/data/child-lookup.ts
+new file mode 100644
+index 0000000..00c385b
+--- /dev/null
++++ b/src/lib/data/child-lookup.ts
+@@ -0,0 +1,21 @@
++import { adminDb } from "@/lib/firebase/admin";
++
++export type ChildLabel = { fullName: string; registrationNumber: string };
++
++/** Resolves child display labels for ids, restricted to the active tenant. */
++export async function lookupChildLabels(posyanduId: string, childIds: string[]): Promise<Map<string, ChildLabel>> {
++  const unique = [...new Set(childIds.filter(Boolean))];
++  const docs = await Promise.all(unique.map(id => adminDb.collection("children").doc(id).get()));
++  const map = new Map<string, ChildLabel>();
++  for (const doc of docs) {
++    const d = doc.data();
++    if (doc.exists && d && d.posyanduId === posyanduId) {
++      map.set(doc.id, { fullName: String(d.fullName || "-"), registrationNumber: String(d.registrationNumber || "-") });
++    }
++  }
++  return map;
++}
++
++export function todayInJakarta(): string {
++  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
++}
+diff --git a/src/lib/data/rows.ts b/src/lib/data/rows.ts
+new file mode 100644
+index 0000000..3bd200b
+--- /dev/null
++++ b/src/lib/data/rows.ts
+@@ -0,0 +1,8 @@
++import type { QuerySnapshot } from "firebase-admin/firestore";
++
++export type Row = { id: string } & Record<string, unknown>;
++
++/** Maps a Firestore snapshot to plain rows (document id + fields). */
++export function rowsOf(snap: QuerySnapshot): Row[] {
++  return snap.docs.map(d => ({ ...(d.data() as Record<string, unknown>), id: d.id }));
++}
+diff --git a/tests/summary-provenance.test.ts b/tests/summary-provenance.test.ts
+new file mode 100644
+index 0000000..11e9004
+--- /dev/null
++++ b/tests/summary-provenance.test.ts
+@@ -0,0 +1,22 @@
++import test from "node:test";
++import assert from "node:assert/strict";
++import { validateSummaryProvenance } from "../src/lib/ai/summary-provenance.ts";
++
++const valid = {
++  visitId: "v1", childId: "c1", inputRecordVersion: 2,
++  generatedAt: "2026-11-12T00:00:00.000Z", modelProvider: "google-gemini",
++  modelVersion: "gemini-2.5-flash", promptVersion: "visit-summary-id-v1.1",
++  knowledgeSourceIds: ["k1"], safetyStatus: "passed" as const,
++};
++
++test("accepts complete provenance", () => {
++  assert.equal(validateSummaryProvenance(valid), true);
++  assert.equal(validateSummaryProvenance({ ...valid, knowledgeSourceIds: [], safetyStatus: "fallback_template" }), true);
++});
++
++test("rejects incomplete or malformed provenance", () => {
++  assert.equal(validateSummaryProvenance({ ...valid, promptVersion: "" }), false);
++  assert.equal(validateSummaryProvenance({ ...valid, inputRecordVersion: 0 }), false);
++  assert.equal(validateSummaryProvenance({ ...valid, generatedAt: "bukan-tanggal" }), false);
++  assert.equal(validateSummaryProvenance({ ...valid, safetyStatus: "unknown" as never }), false);
++});
+diff --git a/tsconfig.json b/tsconfig.json
+index 55e2a02..6e97282 100644
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -6,6 +6,7 @@
+     "skipLibCheck": true,
+     "strict": true,
+     "noEmit": true,
++    "allowImportingTsExtensions": true,
+     "esModuleInterop": true,
+     "module": "esnext",
+     "moduleResolution": "bundler",

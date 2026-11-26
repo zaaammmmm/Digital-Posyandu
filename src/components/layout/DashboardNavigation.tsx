@@ -36,6 +36,7 @@ const sections: { title: string; items: NavigationItem[] }[] = [
     title: "Pengelolaan",
     items: [
       { label: "Administrasi sistem", href: "/admin", icon: UsersRound, match: "/admin" },
+      { label: "Pengguna & peran", href: "/admin/users", icon: UsersRound },
       { label: "Laporan layanan", href: "/admin/reports", icon: FileBarChart2 },
       { label: "Audit trail", href: "/admin/audit-logs", icon: FileText },
       { label: "Review konten", href: "/reviewer", icon: Activity, match: "/reviewer" },

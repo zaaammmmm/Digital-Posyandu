@@ -11,12 +11,30 @@ export type AuthContext = {
 const ROLES: Role[] = ["parent", "cadre", "health_worker", "posyandu_admin", "content_reviewer", "system_admin"];
 
 export async function requireAuth(req: NextRequest, allowedRoles?: Role[]): Promise<AuthContext | NextResponse> {
-  const match = (req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
-  if (!match) return NextResponse.json({ error: "Autentikasi diperlukan" }, { status: 401 });
   try {
-    const token = await adminAuth.verifyIdToken(match[1], true);
-    const posyanduId = req.headers.get("x-posyandu-id")?.trim();
-    if (!posyanduId) return NextResponse.json({ error: "Header x-posyandu-id wajib diisi" }, { status: 400 });
+    const bearer = (req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
+    let token: DecodedIdToken;
+    let posyanduId: string | undefined;
+    if (bearer) {
+      token = await adminAuth.verifyIdToken(bearer[1], true);
+      posyanduId = req.headers.get("x-posyandu-id")?.trim();
+    } else {
+      // Browser pages authenticate with the httpOnly session cookie created by /api/auth/session.
+      const sessionCookie = req.cookies.get("__session")?.value;
+      if (!sessionCookie) return NextResponse.json({ error: "Autentikasi diperlukan" }, { status: 401 });
+      if (!["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
+        // CSRF defence for cookie-authenticated writes: the Origin must match this host.
+        const origin = req.headers.get("origin");
+        let originHost = "";
+        try { originHost = origin ? new URL(origin).host : ""; } catch { /* invalid origin */ }
+        if (!originHost || originHost !== req.headers.get("host")) {
+          return NextResponse.json({ error: "Origin permintaan tidak diizinkan" }, { status: 403 });
+        }
+      }
+      token = await adminAuth.verifySessionCookie(sessionCookie, true);
+      posyanduId = req.cookies.get("active_posyandu")?.value?.trim();
+    }
+    if (!posyanduId) return NextResponse.json({ error: "Posyandu aktif wajib ditentukan" }, { status: 400 });
     const membershipId = `${token.uid}_${posyanduId}`;
     const membershipSnap = await adminDb.collection("memberships").doc(membershipId).get();
     if (!membershipSnap.exists) return NextResponse.json({ error: "Keanggotaan Posyandu tidak ditemukan" }, { status: 403 });

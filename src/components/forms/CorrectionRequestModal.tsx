@@ -10,26 +10,29 @@ export const CorrectionRequestModal: React.FC<{
 }> = ({ visitId, isOpen, onClose }) => {
   const [reason, setReason] = useState("");
   const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
 
   if (!isOpen) return null;
 
   const handleSend = async () => {
-    const res = await fetch("/api/corrections/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        visitId,
-        requestedBy: "wali-1",
-        reason,
-      }),
-    });
-    if (res.ok) {
-      setStatus("Permintaan koreksi berhasil dikirim!");
+    setError("");
+    try {
+      const res = await fetch("/api/corrections/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitId, reason }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Permintaan koreksi gagal dikirim.");
+      setStatus("Permintaan koreksi berhasil dikirim.");
       setTimeout(() => {
         onClose();
         setStatus("");
         setReason("");
+        window.location.reload();
       }, 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Permintaan koreksi gagal dikirim.");
     }
   };
 
@@ -52,6 +55,11 @@ export const CorrectionRequestModal: React.FC<{
             className="posyandu-input resize-none"
           />
         </div>
+        {error && (
+          <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm font-medium text-rose-800">
+            {error}
+          </p>
+        )}
         {status && (
           <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm font-medium text-emerald-800">
             {status}

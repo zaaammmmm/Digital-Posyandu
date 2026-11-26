@@ -9,13 +9,33 @@ export default function NewChildPage() {
   const [name, setName] = useState("");
   const [dob, setDob] = useState("");
   const [sex, setSex] = useState<"male" | "female">("male");
-  const [guardianName, setGuardianName] = useState("");
-  const [contact, setContact] = useState("");
+  const [registrationNumber, setRegistrationNumber] = useState("");
+  const [guardianUids, setGuardianUids] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Data anak dan wali tersimpan.");
-    router.push("/cadre/children");
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/children", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          registrationNumber, fullName: name, dateOfBirth: dob, sex,
+          guardianUids: guardianUids.split(",").map(v => v.trim()).filter(Boolean),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Data anak gagal disimpan.");
+      router.push("/cadre/children");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Data anak gagal disimpan.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -27,6 +47,16 @@ export default function NewChildPage() {
         </p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="posyandu-label">Nomor Registrasi Internal</label>
+          <input
+            required
+            value={registrationNumber}
+            onChange={(e) => setRegistrationNumber(e.target.value)}
+            placeholder="Misal: REG-001"
+            className="posyandu-input"
+          />
+        </div>
         <div>
           <label className="posyandu-label">Nama Lengkap Anak</label>
           <input
@@ -51,7 +81,7 @@ export default function NewChildPage() {
             <label className="posyandu-label">Jenis Kelamin</label>
             <select
               value={sex}
-              onChange={(e: any) => setSex(e.target.value)}
+              onChange={(e) => setSex(e.target.value as "male" | "female")}
               className="posyandu-input"
             >
               <option value="male">Laki-laki</option>
@@ -60,26 +90,18 @@ export default function NewChildPage() {
           </div>
         </div>
         <div>
-          <label className="posyandu-label">Nama Orang Tua / Wali</label>
+          <label className="posyandu-label">UID Akun Orang Tua/Wali (opsional, pisahkan dengan koma)</label>
           <input
-            required
-            value={guardianName}
-            onChange={(e) => setGuardianName(e.target.value)}
+            value={guardianUids}
+            onChange={(e) => setGuardianUids(e.target.value)}
+            placeholder="UID akun parent aktif pada Posyandu ini"
             className="posyandu-input"
           />
+          <p className="mt-1 text-xs text-slate-500">Nama dan kontak wali tidak disimpan pada tahap ini (minimisasi data).</p>
         </div>
-        <div>
-          <label className="posyandu-label">Kontak Operasional</label>
-          <input
-            required
-            value={contact}
-            onChange={(e) => setContact(e.target.value)}
-            placeholder="Nomor ponsel wali"
-            className="posyandu-input"
-          />
-        </div>
-        <Button type="submit" className="w-full mt-2">
-          Daftarkan Anak
+        {error && <p role="alert" className="text-xs font-medium text-rose-800 bg-rose-50 border border-rose-200 px-3.5 py-2.5 rounded-xl">{error}</p>}
+        <Button type="submit" disabled={loading} className="w-full mt-2">
+          {loading ? "Menyimpan..." : "Daftarkan Anak"}
         </Button>
       </form>
     </div>

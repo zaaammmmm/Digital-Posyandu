@@ -1,8 +1,22 @@
 import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { adminDb } from "@/lib/firebase/admin";
+import { requirePageContext } from "@/lib/auth/page-context";
+import { todayInJakarta } from "@/lib/data/child-lookup";
 
-export default function CadreDashboard() {
+export default async function CadreDashboard() {
+  const ctx = await requirePageContext(["cadre", "health_worker", "posyandu_admin"]);
+  const visits = adminDb.collection("visits").where("posyanduId", "==", ctx.posyanduId);
+  const [children, today, pending, needsCorrection, corrections] = await Promise.all([
+    adminDb.collection("children").where("posyanduId", "==", ctx.posyanduId).count().get(),
+    visits.where("visitDate", "==", todayInJakarta()).count().get(),
+    visits.where("verificationStatus", "==", "pending_verification").count().get(),
+    visits.where("verificationStatus", "==", "needs_correction").count().get(),
+    adminDb.collection("correction_requests").where("posyanduId", "==", ctx.posyanduId)
+      .where("status", "==", "pending_review").count().get(),
+  ]);
+  const followUps = needsCorrection.data().count + corrections.data().count;
   return (
     <div className="space-y-6">
       <div className="posyandu-page-header">
@@ -20,19 +34,19 @@ export default function CadreDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-slate-400">
           <p className="text-xs font-medium text-slate-500">Sasaran Terdaftar</p>
-          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1.5">45</p>
+          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1.5">{children.data().count}</p>
         </div>
         <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-emerald-600">
-          <p className="text-xs font-medium text-slate-500">Hadir Hari Ini</p>
-          <p className="text-2xl sm:text-3xl font-bold text-emerald-700 mt-1.5">28</p>
+          <p className="text-xs font-medium text-slate-500">Kunjungan Hari Ini</p>
+          <p className="text-2xl sm:text-3xl font-bold text-emerald-700 mt-1.5">{today.data().count}</p>
         </div>
         <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-amber-500">
           <p className="text-xs font-medium text-slate-500">Menunggu Verifikasi</p>
-          <p className="text-2xl sm:text-3xl font-bold text-amber-700 mt-1.5">5</p>
+          <p className="text-2xl sm:text-3xl font-bold text-amber-700 mt-1.5">{pending.data().count}</p>
         </div>
         <div className="posyandu-card p-4 sm:p-5 border-t-4 border-t-rose-500">
           <p className="text-xs font-medium text-slate-500">Tindak Lanjut</p>
-          <p className="text-2xl sm:text-3xl font-bold text-rose-700 mt-1.5">2</p>
+          <p className="text-2xl sm:text-3xl font-bold text-rose-700 mt-1.5">{followUps}</p>
         </div>
       </div>
 

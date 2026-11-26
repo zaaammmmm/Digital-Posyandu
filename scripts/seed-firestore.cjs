@@ -67,14 +67,13 @@ ops.push({ label: `posyandu/${posyanduId}`, run: async () => {
   return snap.exists ? 'sudah ada — tidak diubah' : 'dibuat';
 }});
 
-function planAccount(kind, role) {
-  const prefix = kind === 'admin' ? 'SEED_ADMIN' : 'SEED_REVIEWER';
+function planAccount(kind, role, prefix, defaultDisplayName) {
   const email = process.env[`${prefix}_EMAIL`]?.trim().toLowerCase();
   const password = process.env[`${prefix}_PASSWORD`];
   if (!email && !password) return;
   if (!email || !password) throw new Error(`${prefix}_EMAIL dan ${prefix}_PASSWORD harus diisi bersama.`);
   if (password.length < 12) throw new Error(`${prefix}_PASSWORD minimal 12 karakter.`);
-  const displayName = process.env[`${prefix}_NAME`] || (kind === 'admin' ? 'Administrator Posyandu' : 'Reviewer Konten');
+  const displayName = process.env[`${prefix}_NAME`] || defaultDisplayName;
   ops.push({ label: `${kind} ${email} + membership ${posyanduId}`, run: async () => {
     let user;
     try {
@@ -104,8 +103,12 @@ function planAccount(kind, role) {
   }});
 }
 
-planAccount('admin', 'posyandu_admin');
-planAccount('reviewer', 'content_reviewer');
+planAccount('admin', 'posyandu_admin', 'SEED_ADMIN', 'Administrator Posyandu');
+planAccount('reviewer', 'content_reviewer', 'SEED_REVIEWER', 'Reviewer Konten');
+// Optional operational accounts. Use real staff accounts in production; for local tests use synthetic names only.
+planAccount('cadre', 'cadre', 'SEED_CADRE', 'Kader Posyandu');
+planAccount('health_worker', 'health_worker', 'SEED_HEALTH_WORKER', 'Bidan / Tenaga Kesehatan');
+planAccount('parent', 'parent', 'SEED_PARENT', 'Orang Tua / Wali');
 
 function readJsonArray(fileEnv, label) {
   const filename = process.env[fileEnv];

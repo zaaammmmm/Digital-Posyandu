@@ -1,8 +1,32 @@
 import React from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/Badge";
+import { adminDb } from "@/lib/firebase/admin";
+import { rowsOf } from "@/lib/data/rows";
+import { requirePageContext } from "@/lib/auth/page-context";
+import { lookupChildLabels } from "@/lib/data/child-lookup";
 
-export default function HealthWorkerDashboard() {
+const STAFF = ["health_worker", "posyandu_admin", "system_admin"] as const;
+
+export default async function HealthWorkerDashboard() {
+  const ctx = await requirePageContext([...STAFF]);
+  const [visitSnap, measSnap, correctionCount] = await Promise.all([
+    adminDb.collection("visits").where("posyanduId", "==", ctx.posyanduId)
+      .where("verificationStatus", "==", "pending_verification").limit(100).get(),
+    adminDb.collection("anthropometry_measurements").where("posyanduId", "==", ctx.posyanduId)
+      .where("verificationStatus", "==", "pending_verification").limit(300).get(),
+    adminDb.collection("correction_requests").where("posyanduId", "==", ctx.posyanduId)
+      .where("status", "==", "pending_review").count().get(),
+  ]);
+  const visits = rowsOf(visitSnap)
+    .sort((a, b) => String(a.visitDate).localeCompare(String(b.visitDate)));
+  const labels = await lookupChildLabels(ctx.posyanduId, visits.map(v => String(v.childId)));
+  const measurementByVisit = new Map<string, Record<string, unknown>>();
+  for (const d of measSnap.docs) {
+    const m = d.data();
+    if (!m.supersededAt) measurementByVisit.set(String(m.visitId), m);
+  }
+
   return (
     <div className="space-y-5">
       <div className="posyandu-page-header">
@@ -12,6 +36,9 @@ export default function HealthWorkerDashboard() {
             Periksa validitas hasil pengukuran sebelum pengesahan dan pembuatan ringkasan otomatis.
           </p>
         </div>
+        <Link href="/health-worker/corrections" className="text-sm font-semibold text-emerald-700 hover:underline">
+          Permintaan koreksi ({correctionCount.data().count})
+        </Link>
       </div>
 
       <div className="posyandu-table-wrap">
@@ -26,22 +53,30 @@ export default function HealthWorkerDashboard() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            <tr className="hover:bg-slate-50/80 transition-colors">
-              <td className="posyandu-td whitespace-nowrap">25 Nov 2026</td>
-              <td className="posyandu-td font-semibold text-slate-900">Muhammad Rayyan</td>
-              <td className="posyandu-td">BB: 10.2 kg &bull; TB: 78.4 cm</td>
-              <td className="posyandu-td">
-                <StatusBadge status="pending_verification" />
-              </td>
-              <td className="posyandu-td">
-                <Link
-                  href="/health-worker/verifications/visit-demo-1"
-                  className="text-emerald-700 hover:text-emerald-900 hover:underline font-semibold"
-                >
-                  Tinjau & Validasi
-                </Link>
-              </td>
-            </tr>
+            {visits.length === 0 && (
+              <tr><td className="posyandu-td text-slate-500" colSpan={5}>Tidak ada kunjungan yang menunggu verifikasi.</td></tr>
+            )}
+            {visits.map(v => {
+              const m = measurementByVisit.get(v.id);
+              const flags = Array.isArray(m?.qualityFlags) ? (m!.qualityFlags as string[]) : [];
+              return (
+                <tr key={v.id} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="posyandu-td whitespace-nowrap">{String(v.visitDate)}</td>
+                  <td className="posyandu-td font-semibold text-slate-900">{labels.get(String(v.childId))?.fullName || "-"}</td>
+                  <td className="posyandu-td">
+                    {m ? <>BB: {String(m.weightKg)} kg &bull; TB/PB: {String(m.lengthHeightCm)} cm</> : "Pengukuran tidak ditemukan"}
+                    {flags.length > 0 && <span className="ml-2 text-xs text-amber-700">({flags.length} penanda perlu diperiksa)</span>}
+                  </td>
+                  <td className="posyandu-td"><StatusBadge status="pending_verification" /></td>
+                  <td className="posyandu-td">
+                    <Link href={`/health-worker/verifications/${v.id}`}
+                      className="text-emerald-700 hover:text-emerald-900 hover:underline font-semibold">
+                      Tinjau &amp; Validasi
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -1,5 +1,6 @@
 import React from "react";
 import { VisitForm } from "@/components/forms/VisitForm";
+import { requirePageContext } from "@/lib/auth/page-context";
 
 export default async function NewVisitPage({
   params,
@@ -7,6 +8,7 @@ export default async function NewVisitPage({
   params: Promise<{ childId: string }>;
 }) {
   const { childId } = await params;
+  const ctx = await requirePageContext(["cadre", "health_worker"]);
 
   return (
     <div className="max-w-lg mx-auto space-y-5">
@@ -16,7 +18,7 @@ export default async function NewVisitPage({
           <p className="posyandu-page-subtitle">ID Anak: {childId}</p>
         </div>
       </div>
-      <VisitForm childId={childId} posyanduId="posyandu-pilot-tempak" />
+      <VisitForm childId={childId} posyanduId={ctx.posyanduId} />
     </div>
   );
 }
